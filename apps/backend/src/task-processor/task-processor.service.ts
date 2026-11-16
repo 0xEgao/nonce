@@ -12,6 +12,7 @@ import { CohortReminderService } from '@/cohorts/cohort-reminder.service';
 import { CertificatesService } from '@/certificates/certificates.service';
 import { CohortCalendarService } from '@/cohort-calendar/cohort-calendar.service';
 import { FellowshipReportsService } from '@/fellowship-reports/fellowship-reports.service';
+import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { AssignmentProvisioningService } from '@/assignments/assignment-provisioning.service';
 import { RunsService } from '@/assignments/runs.service';
 import { AdminAssignmentsService } from '@/assignments/admin-assignments.service';
@@ -33,6 +34,7 @@ export class APITaskProcessorService {
         private readonly certificatesService: CertificatesService,
         private readonly cohortCalendarService: CohortCalendarService,
         private readonly fellowshipReportsService: FellowshipReportsService,
+        private readonly fellowshipsService: FellowshipsService,
         private readonly assignmentProvisioningService: AssignmentProvisioningService,
         private readonly runsService: RunsService,
         private readonly adminAssignmentsService: AdminAssignmentsService,
@@ -150,6 +152,11 @@ export class APITaskProcessorService {
                     break;
                 case TaskType.ARCHIVE_ASSIGNMENT_REPOS:
                     await this.adminAssignmentsService.handleArchiveAssignmentRepos(
+                        task,
+                    );
+                    break;
+                case TaskType.COMPLETE_ENDED_FELLOWSHIPS:
+                    await this.fellowshipsService.handleCompleteEndedFellowships(
                         task,
                     );
                     break;

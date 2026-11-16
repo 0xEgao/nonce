@@ -2,11 +2,13 @@ import {
     BadRequestException,
     ForbiddenException,
     Injectable,
+    Logger,
     NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, LessThan, Repository } from 'typeorm';
 import { Fellowship } from '@/entities/fellowship.entity';
+import { APITask } from '@/entities/api-task.entity';
 import { User } from '@/entities/user.entity';
 import {
     FellowshipSortBy,
@@ -22,6 +24,11 @@ import { PaginatedDataDto, PaginatedQueryDto } from '@/common/dto';
 import { UserRole } from '@/common/enum';
 import { addMonths, escapeLikePattern } from '@/common/common';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
+import { TaskType } from '@/task-processor/task.enums';
+import { isLastRetry } from '@/task-processor/task-processor.utils';
+
+// The sweep runs daily at this UTC hour.
+const COMPLETE_ENDED_FELLOWSHIPS_HOUR_UTC = 4;
 
 const FELLOWSHIP_SORT_COLUMNS: Record<FellowshipSortBy, string> = {
     [FellowshipSortBy.CREATED_AT]: 'fellowship.createdAt',
@@ -32,9 +39,13 @@ const FELLOWSHIP_SORT_COLUMNS: Record<FellowshipSortBy, string> = {
 
 @Injectable()
 export class FellowshipsService {
+    private readonly logger = new Logger(FellowshipsService.name);
+
     constructor(
         @InjectRepository(Fellowship)
         private readonly fellowshipRepository: Repository<Fellowship>,
+        @InjectRepository(APITask)
+        private readonly apiTaskRepository: Repository<APITask<any>>,
         private readonly dbTransactionService: DbTransactionService,
     ) {}
 
@@ -214,6 +225,71 @@ export class FellowshipsService {
             totalRecords,
             records: records.map(FellowshipResponseDto.fromEntity),
         });
+    }
+
+    /**
+     * Moves every ACTIVE fellowship whose contract has ended to COMPLETED.
+     * Idempotent: a second run finds nothing left to update. Returns the number
+     * of fellowships transitioned.
+     */
+    async completeEndedFellowships(now: Date = new Date()): Promise<number> {
+        // A null endDate never matches `<`, so ACTIVE rows without one are left alone.
+        const result = await this.fellowshipRepository.update(
+            { status: FellowshipStatus.ACTIVE, endDate: LessThan(now) },
+            { status: FellowshipStatus.COMPLETED },
+        );
+        return result.affected ?? 0;
+    }
+
+    async handleCompleteEndedFellowships(
+        task: APITask<TaskType.COMPLETE_ENDED_FELLOWSHIPS>,
+    ): Promise<void> {
+        try {
+            const completed = await this.completeEndedFellowships();
+            if (completed > 0) {
+                this.logger.log(
+                    `Marked ${completed} ended fellowship(s) as COMPLETED`,
+                );
+            }
+
+            await this.scheduleNextCompleteEndedFellowships();
+        } catch (error) {
+            this.logger.error(
+                `Failed to complete ended fellowships: ${error?.message}`,
+                error?.stack,
+            );
+
+            // Queue the next run before giving up, or one bad day ends the chain.
+            if (isLastRetry(task)) {
+                await this.scheduleNextCompleteEndedFellowships();
+            }
+
+            throw error;
+        }
+    }
+
+    // The next 04:00 UTC strictly after `now`, anchored to the clock rather than
+    // to the finished task so downtime does not queue a burst of catch-up runs.
+    async scheduleNextCompleteEndedFellowships(
+        now: Date = new Date(),
+    ): Promise<void> {
+        const nextExecuteOnTime = new Date(
+            Date.UTC(
+                now.getUTCFullYear(),
+                now.getUTCMonth(),
+                now.getUTCDate(),
+                COMPLETE_ENDED_FELLOWSHIPS_HOUR_UTC,
+            ),
+        );
+        if (nextExecuteOnTime <= now) {
+            nextExecuteOnTime.setUTCDate(nextExecuteOnTime.getUTCDate() + 1);
+        }
+
+        const nextTask = new APITask<TaskType.COMPLETE_ENDED_FELLOWSHIPS>();
+        nextTask.type = TaskType.COMPLETE_ENDED_FELLOWSHIPS;
+        nextTask.data = {};
+        nextTask.executeOnTime = nextExecuteOnTime;
+        await this.apiTaskRepository.save(nextTask);
     }
 
     async listPublicFellows(

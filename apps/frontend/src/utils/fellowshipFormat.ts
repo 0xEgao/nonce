@@ -1,4 +1,4 @@
-import { FellowshipKind, FellowshipType } from '../types/fellowship';
+import { FellowshipKind, FellowshipStatus, FellowshipType } from '../types/fellowship';
 
 /** "DEVELOPER" → "Developer" — raw enum values are not user-facing copy. */
 export const formatFellowshipType = (type: FellowshipType): string =>
@@ -13,3 +13,10 @@ const FELLOWSHIP_KIND_LABELS: Record<FellowshipKind, string> = {
 
 export const formatFellowshipKind = (kind: FellowshipKind): string =>
   FELLOWSHIP_KIND_LABELS[kind];
+
+/**
+ * Reports can be filed for active fellowships and for completed ones (the final
+ * month's report and late reports). Mirrors the backend's reportable statuses.
+ */
+export const isReportableStatus = (status: FellowshipStatus): boolean =>
+  status === FellowshipStatus.ACTIVE || status === FellowshipStatus.COMPLETED;
