@@ -242,10 +242,15 @@ const MyReports = () => {
     return [...records].sort((a, b) => b.year - a.year || b.month - a.month);
   }, [reportsQuery.data?.records]);
 
-  // New reports can only be filed against an active fellowship.
+  // New reports can be filed against an active fellowship, or a completed one for the
+  // final/late report. Prefer an active one when the fellow has both.
   const reportableFellowship = useMemo(() => {
     const fellowships = fellowshipsQuery.data?.records ?? [];
-    return fellowships.find((f) => f.status === FellowshipStatus.ACTIVE) ?? null;
+    return (
+      fellowships.find((f) => f.status === FellowshipStatus.ACTIVE) ??
+      fellowships.find((f) => f.status === FellowshipStatus.COMPLETED) ??
+      null
+    );
   }, [fellowshipsQuery.data?.records]);
 
   const isLoading = reportsQuery.isLoading || fellowshipsQuery.isLoading;

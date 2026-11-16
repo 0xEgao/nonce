@@ -54,6 +54,9 @@ export type ArchiveAssignmentReposTaskData = {
     cohortId: string;
 };
 
+// Recurring sweep with no per-run input; each run queues the next one.
+export type CompleteEndedFellowshipsTaskData = Record<string, never>;
+
 export type TaskDataMap = {
     [TaskType.ASSIGN_COHORT_ROLE]: AssignCohortRoleTaskData;
     [TaskType.ASSIGN_COHORT_ALUMNI_ROLE]: AssignCohortAlumniRoleTaskData;
@@ -67,6 +70,7 @@ export type TaskDataMap = {
     [TaskType.PROVISION_ASSIGNMENT_REPO]: ProvisionAssignmentRepoTaskData;
     [TaskType.RECONCILE_CI_RUN]: ReconcileCIRunTaskData;
     [TaskType.ARCHIVE_ASSIGNMENT_REPOS]: ArchiveAssignmentReposTaskData;
+    [TaskType.COMPLETE_ENDED_FELLOWSHIPS]: CompleteEndedFellowshipsTaskData;
 };
 
 export type TaskData<T extends TaskType> = TaskDataMap[T];

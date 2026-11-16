@@ -9,6 +9,7 @@ import { CertificatesModule } from '@/certificates/certificates.module';
 import { CohortCalendarModule } from '@/cohort-calendar/cohort-calendar.module';
 import { FellowshipReportsModule } from '@/fellowship-reports/fellowship-reports.module';
 import { AssignmentsModule } from '@/assignments/assignments.module';
+import { FellowshipsModule } from '@/fellowships/fellowships.module';
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { AssignmentsModule } from '@/assignments/assignments.module';
         CertificatesModule,
         CohortCalendarModule,
         FellowshipReportsModule,
+        FellowshipsModule,
         AssignmentsModule,
     ],
     providers: [APITaskProcessorService],

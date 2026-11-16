@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { EntityManager, LessThan } from 'typeorm';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { FellowshipResponseDto } from '@/fellowships/fellowships.response.dto';
 import { Fellowship } from '@/entities/fellowship.entity';
+import { APITask } from '@/entities/api-task.entity';
+import { TaskType } from '@/task-processor/task.enums';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
 import {
     FellowshipStatus,
@@ -48,6 +50,8 @@ describe('FellowshipsService — startContract', () => {
         findOne: jest.fn(),
     };
 
+    const apiTaskRepository = { save: jest.fn() };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -55,6 +59,10 @@ describe('FellowshipsService — startContract', () => {
                 {
                     provide: getRepositoryToken(Fellowship),
                     useValue: fellowshipRepository,
+                },
+                {
+                    provide: getRepositoryToken(APITask),
+                    useValue: apiTaskRepository,
                 },
                 {
                     provide: DbTransactionService,
@@ -154,6 +162,8 @@ describe('FellowshipsService — listPublicFellows', () => {
         findAndCount: jest.fn(),
     };
 
+    const apiTaskRepository = { save: jest.fn() };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -161,6 +171,10 @@ describe('FellowshipsService — listPublicFellows', () => {
                 {
                     provide: getRepositoryToken(Fellowship),
                     useValue: fellowshipRepository,
+                },
+                {
+                    provide: getRepositoryToken(APITask),
+                    useValue: apiTaskRepository,
                 },
                 {
                     provide: DbTransactionService,
@@ -204,6 +218,139 @@ describe('FellowshipsService — listPublicFellows', () => {
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
+        });
+    });
+});
+
+describe('FellowshipsService — completeEndedFellowships', () => {
+    let service: FellowshipsService;
+
+    const fellowshipRepository = {
+        update: jest.fn(),
+    };
+    const apiTaskRepository = { save: jest.fn() };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                FellowshipsService,
+                {
+                    provide: getRepositoryToken(Fellowship),
+                    useValue: fellowshipRepository,
+                },
+                {
+                    provide: getRepositoryToken(APITask),
+                    useValue: apiTaskRepository,
+                },
+                {
+                    provide: DbTransactionService,
+                    useValue: { execute: jest.fn() },
+                },
+            ],
+        }).compile();
+
+        service = module.get(FellowshipsService);
+    });
+
+    afterEach(() => {
+        jest.resetAllMocks();
+        jest.useRealTimers();
+    });
+
+    const task = (retryCount: number, retryLimit = 3) =>
+        ({
+            retryCount,
+            retryLimit,
+        }) as APITask<TaskType.COMPLETE_ENDED_FELLOWSHIPS>;
+
+    const queuedTask = (): APITask<TaskType.COMPLETE_ENDED_FELLOWSHIPS> =>
+        apiTaskRepository.save.mock.calls[0][0];
+
+    describe('completeEndedFellowships', () => {
+        it('moves only ACTIVE fellowships whose endDate is before now to COMPLETED', async () => {
+            const now = new Date('2026-11-16T04:00:00Z');
+            fellowshipRepository.update.mockResolvedValue({ affected: 3 });
+
+            const completed = await service.completeEndedFellowships(now);
+
+            expect(completed).toBe(3);
+            expect(fellowshipRepository.update).toHaveBeenCalledWith(
+                { status: FellowshipStatus.ACTIVE, endDate: LessThan(now) },
+                { status: FellowshipStatus.COMPLETED },
+            );
+        });
+
+        it('returns 0 when the driver does not report affected rows', async () => {
+            fellowshipRepository.update.mockResolvedValue({});
+
+            await expect(service.completeEndedFellowships()).resolves.toBe(0);
+        });
+    });
+
+    describe('scheduleNextCompleteEndedFellowships', () => {
+        it('queues the next run for 04:00 UTC the same day when it is still ahead', async () => {
+            await service.scheduleNextCompleteEndedFellowships(
+                new Date('2026-11-16T01:30:00Z'),
+            );
+
+            expect(queuedTask().type).toBe(TaskType.COMPLETE_ENDED_FELLOWSHIPS);
+            expect(queuedTask().data).toEqual({});
+            expect(queuedTask().executeOnTime).toEqual(
+                new Date('2026-11-16T04:00:00Z'),
+            );
+        });
+
+        it('rolls to the next day once 04:00 UTC has passed, including exactly at 04:00', async () => {
+            await service.scheduleNextCompleteEndedFellowships(
+                new Date('2026-11-16T04:00:00Z'),
+            );
+            await service.scheduleNextCompleteEndedFellowships(
+                new Date('2026-11-30T05:00:00Z'),
+            );
+
+            expect(
+                apiTaskRepository.save.mock.calls[0][0].executeOnTime,
+            ).toEqual(new Date('2026-11-17T04:00:00Z'));
+            expect(
+                apiTaskRepository.save.mock.calls[1][0].executeOnTime,
+            ).toEqual(new Date('2026-12-01T04:00:00Z'));
+        });
+    });
+
+    describe('handleCompleteEndedFellowships', () => {
+        it('sweeps, then queues exactly one next run', async () => {
+            jest.useFakeTimers().setSystemTime(
+                new Date('2026-11-16T04:00:05Z'),
+            );
+            fellowshipRepository.update.mockResolvedValue({ affected: 2 });
+
+            await service.handleCompleteEndedFellowships(task(0));
+
+            expect(fellowshipRepository.update).toHaveBeenCalledTimes(1);
+            expect(apiTaskRepository.save).toHaveBeenCalledTimes(1);
+            expect(queuedTask().executeOnTime).toEqual(
+                new Date('2026-11-17T04:00:00Z'),
+            );
+        });
+
+        it('rethrows without queueing the next run while retries remain', async () => {
+            fellowshipRepository.update.mockRejectedValue(new Error('db down'));
+
+            await expect(
+                service.handleCompleteEndedFellowships(task(0)),
+            ).rejects.toThrow('db down');
+
+            expect(apiTaskRepository.save).not.toHaveBeenCalled();
+        });
+
+        it('queues the next run on the last failed retry so the chain survives', async () => {
+            fellowshipRepository.update.mockRejectedValue(new Error('db down'));
+
+            await expect(
+                service.handleCompleteEndedFellowships(task(2)),
+            ).rejects.toThrow('db down');
+
+            expect(apiTaskRepository.save).toHaveBeenCalledTimes(1);
         });
     });
 });

@@ -36,11 +36,10 @@ import {
 } from '../../hooks/fellowshipHooks';
 import {
   FellowshipReportStatus,
-  FellowshipStatus,
   type GetFellowshipResponseDto,
 } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { formatFellowshipType } from '../../utils/fellowshipFormat';
+import { formatFellowshipType, isReportableStatus } from '../../utils/fellowshipFormat';
 import {
   CHAR_LIMIT,
   MAX_LINKS,
@@ -109,12 +108,9 @@ const Report = () => {
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const fellowshipsQuery = useMyFellowships({ page: 0, pageSize: 50 });
-  // Reports can only be filed against an active fellowship.
+  // Reports can be filed against active fellowships and completed ones (final/late reports).
   const fellowshipOptions = useMemo(
-    () =>
-      (fellowshipsQuery.data?.records ?? []).filter(
-        (f) => f.status === FellowshipStatus.ACTIVE,
-      ),
+    () => (fellowshipsQuery.data?.records ?? []).filter((f) => isReportableStatus(f.status)),
     [fellowshipsQuery.data?.records],
   );
 
@@ -171,8 +167,8 @@ const Report = () => {
   // New reports always belong to the current year; existing ones keep their own.
   const year = current?.year ?? currentYear;
 
-  // Submission is only allowed while the fellowship is active.
-  const fellowshipActive = fellowship?.status === FellowshipStatus.ACTIVE;
+  // Submission is allowed while the fellowship is active or completed.
+  const fellowshipActive = !!fellowship && isReportableStatus(fellowship.status);
   // The cap is a character count and applies to the summary and each reflective
   // answer independently.
   const summaryChars = countChars(summary);
@@ -222,7 +218,7 @@ const Report = () => {
   const handleSaveDraft = async () => {
     if (!fellowshipId || !summary.trim()) return;
     if (!fellowshipActive) {
-      setToast({ kind: 'error', msg: 'Reports can only be filed for an active fellowship.' });
+      setToast({ kind: 'error', msg: 'Reports can only be filed for an active or completed fellowship.' });
       return;
     }
     if (anyOverLimit) {
@@ -267,7 +263,7 @@ const Report = () => {
     setSubmitAttempted(true);
     if (!fellowshipId) return;
     if (!fellowshipActive) {
-      setToast({ kind: 'error', msg: 'Reports can only be submitted for an active fellowship.' });
+      setToast({ kind: 'error', msg: 'Reports can only be submitted for an active or completed fellowship.' });
       return;
     }
     if (summaryMissing) {
@@ -370,7 +366,7 @@ const Report = () => {
                   >
                     {fellowshipOptions.length === 0 && (
                       <MenuItem value="" disabled>
-                        No active fellowships
+                        No fellowships to report on
                       </MenuItem>
                     )}
                     {fellowshipOptions.map((f) => (
@@ -404,7 +400,7 @@ const Report = () => {
 
               {isEditable && fellowship && !fellowshipActive && (
                 <Alert severity="warning" sx={{ mb: 2 }}>
-                  Reports can only be submitted while your fellowship is active.
+                  Reports can only be submitted while your fellowship is active or completed.
                 </Alert>
               )}
 

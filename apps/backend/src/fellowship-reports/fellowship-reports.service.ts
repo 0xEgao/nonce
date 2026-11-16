@@ -43,6 +43,13 @@ const REPORT_SORT_COLUMNS: Record<
     [FellowshipReportSortBy.UPDATED_AT]: 'report.updatedAt',
 };
 
+// COMPLETED fellowships still owe (and may file) their final-month and late
+// reports; ended contracts are swept to COMPLETED by a daily cron.
+const REPORTABLE_FELLOWSHIP_STATUSES: FellowshipStatus[] = [
+    FellowshipStatus.ACTIVE,
+    FellowshipStatus.COMPLETED,
+];
+
 @Injectable()
 export class FellowshipReportsService {
     private readonly logger = new Logger(FellowshipReportsService.name);
@@ -74,9 +81,9 @@ export class FellowshipReportsService {
             throw new ForbiddenException();
         }
 
-        if (fellowship.status !== FellowshipStatus.ACTIVE) {
+        if (!REPORTABLE_FELLOWSHIP_STATUSES.includes(fellowship.status)) {
             throw new BadRequestException(
-                'Reports can only be created for active fellowships',
+                'Reports can only be created for active or completed fellowships',
             );
         }
 
@@ -186,9 +193,11 @@ export class FellowshipReportsService {
             );
         }
 
-        if (report.fellowship.status !== FellowshipStatus.ACTIVE) {
+        if (
+            !REPORTABLE_FELLOWSHIP_STATUSES.includes(report.fellowship.status)
+        ) {
             throw new BadRequestException(
-                'Reports can only be submitted for active fellowships',
+                'Reports can only be submitted for active or completed fellowships',
             );
         }
 
@@ -480,15 +489,16 @@ export class FellowshipReportsService {
             const periodEnd = new Date(Date.UTC(year, month, 1));
 
             // Only remind fellowships whose contract actually overlaps the target
-            // month. `status` never auto-transitions off ACTIVE, so we cannot lean
-            // on it for either bound:
+            // month. Ended fellowships become COMPLETED within a day, but they still
+            // owe the report for their final month, so both statuses are included and
+            // the dates are what bound the contract:
             //   - startDate < periodEnd  → excludes not-yet-started contracts
             //     (e.g. an Oct-1 start must not get a Sept reminder).
             //   - endDate >= periodStart → excludes already-ended contracts
             //     (a fellowship that ended in Aug owes no Sept report).
             const activeFellowships = await this.fellowshipRepository.find({
                 where: {
-                    status: FellowshipStatus.ACTIVE,
+                    status: In(REPORTABLE_FELLOWSHIP_STATUSES),
                     startDate: LessThan(periodEnd),
                     endDate: MoreThanOrEqual(periodStart),
                 },
