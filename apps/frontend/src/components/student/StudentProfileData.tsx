@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { AlertTriangle } from 'lucide-react';
 import { useUser, useUpdateUser } from '../../hooks/userHooks';
+import { LOCATION_PROBLEM_MESSAGES, locationProblem } from '@nonce/shared';
 
 interface UserProfile {
   id: string;
@@ -128,6 +129,10 @@ const StudentProfileData: React.FC = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showEmailPopup, setShowEmailPopup] = useState(false);
+  // A blank location is only flagged once the user tries to save; a country-only
+  // one ("India") is flagged straight away, so someone sent here by the join
+  // gate sees which field needs fixing.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [notification, setNotification] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
     message: '',
@@ -169,6 +174,13 @@ const StudentProfileData: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile) return;
+    setSubmitAttempted(true);
+
+    const locationIssue = locationProblem(profile.location);
+    if (locationIssue) {
+      setNotification({ show: true, message: LOCATION_PROBLEM_MESSAGES[locationIssue], type: 'error' });
+      return;
+    }
 
     if (profile.skills.length === 0) {
       setNotification({ show: true, message: 'Please select at least one skill', type: 'error' });
@@ -206,6 +218,10 @@ const StudentProfileData: React.FC = () => {
       </Box>
     );
   }
+
+  const locationIssue = locationProblem(profile.location);
+  const shownLocationIssue =
+    locationIssue === 'countryOnly' || (locationIssue === 'blank' && submitAttempted) ? locationIssue : null;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#000', p: { xs: 2, sm: 3 } }}>
@@ -247,8 +263,16 @@ const StudentProfileData: React.FC = () => {
                   required
                   size="small"
                   placeholder="City, Country"
+                  error={shownLocationIssue !== null}
                   sx={inputSx}
                 />
+                {shownLocationIssue ? (
+                  <Typography role="alert" sx={{ ...hintSx, color: '#f87171' }}>
+                    {LOCATION_PROBLEM_MESSAGES[shownLocationIssue]}
+                  </Typography>
+                ) : (
+                  <Typography sx={hintSx}>Your city lets us invite you to Bitshala meetups near you.</Typography>
+                )}
               </Box>
               <Box>
                 <Typography variant="body2" sx={labelSx}>Email*</Typography>
