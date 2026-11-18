@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
-import { EntityManager, LessThan } from 'typeorm';
+import { EntityManager, IsNull, LessThan, Not } from 'typeorm';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { FellowshipResponseDto } from '@/fellowships/fellowships.response.dto';
 import { Fellowship } from '@/entities/fellowship.entity';
@@ -193,13 +193,17 @@ describe('FellowshipsService — listPublicFellows', () => {
 
     afterEach(() => jest.resetAllMocks());
 
-    it('queries ACTIVE fellowships with user/application relations and pagination', async () => {
+    it('queries ACTIVE fellowships that have contract dates, with user/application relations and pagination', async () => {
         fellowshipRepository.findAndCount.mockResolvedValue([[], 0]);
 
         await service.listPublicFellows({ page: 2, pageSize: 20 });
 
         expect(fellowshipRepository.findAndCount).toHaveBeenCalledWith({
-            where: { status: FellowshipStatus.ACTIVE },
+            where: {
+                status: FellowshipStatus.ACTIVE,
+                startDate: Not(IsNull()),
+                endDate: Not(IsNull()),
+            },
             relations: { user: true, application: true },
             order: { createdAt: 'DESC', id: 'ASC' },
             skip: 40,
@@ -230,25 +234,19 @@ describe('FellowshipsService — listPublicFellows', () => {
         });
     });
 
-    it('passes a missing project name and missing dates through as null, without falling back to the proposal title', async () => {
-        const sparse = {
+    it('passes a missing project name through as null, without falling back to the proposal title', async () => {
+        const noProject = {
             ...fellowship,
-            startDate: null,
-            endDate: null,
             application: { ...fellowship.application, projectName: null },
         };
-        fellowshipRepository.findAndCount.mockResolvedValue([[sparse], 1]);
+        fellowshipRepository.findAndCount.mockResolvedValue([[noProject], 1]);
 
         const result = await service.listPublicFellows({
             page: 0,
             pageSize: 20,
         });
 
-        expect(result.records[0]).toMatchObject({
-            projectName: null,
-            startDate: null,
-            endDate: null,
-        });
+        expect(result.records[0].projectName).toBeNull();
     });
 
     // githubUsername and githubProfileUrl must always name the same account.

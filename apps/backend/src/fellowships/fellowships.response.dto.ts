@@ -161,8 +161,8 @@ export class PublicFellowResponseDto {
     projectGithubLink!: string | null;
     type!: FellowshipType;
     kind!: FellowshipKind;
-    startDate!: string | null;
-    endDate!: string | null;
+    startDate!: string;
+    endDate!: string;
 
     constructor(obj: PublicFellowResponseDto) {
         this.id = obj.id;
@@ -180,6 +180,12 @@ export class PublicFellowResponseDto {
     static fromEntity(fellowship: Fellowship): PublicFellowResponseDto {
         const application = fellowship.application;
         const githubUsername = publicGithubUsername(fellowship);
+        // listPublicFellows only selects fellowships with both dates set.
+        if (!fellowship.startDate || !fellowship.endDate) {
+            throw new Error(
+                `Fellowship ${fellowship.id} has no contract dates and cannot be listed publicly`,
+            );
+        }
         return new PublicFellowResponseDto({
             id: fellowship.id,
             displayName: fellowship.user.displayName,
@@ -193,8 +199,8 @@ export class PublicFellowResponseDto {
             projectGithubLink: application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
-            startDate: fellowship.startDate?.toISOString() ?? null,
-            endDate: fellowship.endDate?.toISOString() ?? null,
+            startDate: fellowship.startDate.toISOString(),
+            endDate: fellowship.endDate.toISOString(),
         });
     }
 }
