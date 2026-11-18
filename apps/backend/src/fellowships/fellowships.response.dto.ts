@@ -187,10 +187,9 @@ export class PublicFellowResponseDto {
             githubProfileUrl: githubUsername
                 ? `https://github.com/${githubUsername}`
                 : null,
-            // Many fellowships have no onboarding projectName; the proposal
-            // title is what the admin screens show in that case, so the public
-            // list falls back to it too rather than showing a blank project.
-            projectName: application.projectName || application.title,
+            // Deliberately no fallback to the proposal title: a fellow without
+            // a project name is published as null, not under their proposal.
+            projectName: application.projectName,
             projectGithubLink: application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,

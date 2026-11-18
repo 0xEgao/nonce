@@ -230,7 +230,7 @@ describe('FellowshipsService — listPublicFellows', () => {
         });
     });
 
-    it('falls back to the proposal title for the project and passes missing dates through as null', async () => {
+    it('passes a missing project name and missing dates through as null, without falling back to the proposal title', async () => {
         const sparse = {
             ...fellowship,
             startDate: null,
@@ -245,7 +245,7 @@ describe('FellowshipsService — listPublicFellows', () => {
         });
 
         expect(result.records[0]).toMatchObject({
-            projectName: 'Proposal title',
+            projectName: null,
             startDate: null,
             endDate: null,
         });
