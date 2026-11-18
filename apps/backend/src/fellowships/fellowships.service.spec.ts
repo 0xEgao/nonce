@@ -153,6 +153,7 @@ describe('FellowshipsService — listPublicFellows', () => {
         application: {
             id: 'app-1',
             type: FellowshipType.DESIGNER,
+            title: 'Proposal title',
             projectName: 'Project',
             projectGithubLink: 'https://github.com/alice/project',
             mentorContact: 'mentor@example.com',
@@ -223,6 +224,27 @@ describe('FellowshipsService — listPublicFellows', () => {
             kind: fellowship.kind,
             startDate: '2026-02-01T00:00:00.000Z',
             endDate: '2026-08-01T00:00:00.000Z',
+        });
+    });
+
+    it('falls back to the proposal title for the project and passes missing dates through as null', async () => {
+        const sparse = {
+            ...fellowship,
+            startDate: null,
+            endDate: null,
+            application: { ...fellowship.application, projectName: null },
+        };
+        fellowshipRepository.findAndCount.mockResolvedValue([[sparse], 1]);
+
+        const result = await service.listPublicFellows({
+            page: 0,
+            pageSize: 20,
+        });
+
+        expect(result.records[0]).toMatchObject({
+            projectName: 'Proposal title',
+            startDate: null,
+            endDate: null,
         });
     });
 });

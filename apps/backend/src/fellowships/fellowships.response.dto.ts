@@ -166,7 +166,12 @@ export class PublicFellowResponseDto {
             id: fellowship.id,
             displayName: fellowship.user.displayName,
             githubProfileUrl: fellowship.user.githubProfileUrl,
-            projectName: fellowship.application.projectName,
+            // Many fellowships have no onboarding projectName; the proposal
+            // title is what the admin screens show in that case, so the public
+            // list falls back to it too rather than showing a blank project.
+            projectName:
+                fellowship.application.projectName ||
+                fellowship.application.title,
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
