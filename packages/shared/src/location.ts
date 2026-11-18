@@ -5,7 +5,7 @@
 // meetups in their city, so a value has to name a city. Most students are in
 // India, and a bare "India" says nothing about which city they are in.
 
-/** Values that name only the country, compared after normalizing. */
+/** Words that name only the country, compared lowercased. */
 const COUNTRY_ONLY_LOCATIONS = new Set(['india', 'in', 'ind', 'bharat']);
 
 export type LocationProblem = 'blank' | 'countryOnly';
@@ -18,16 +18,20 @@ export const LOCATION_PROBLEM_MESSAGES: Record<LocationProblem, string> = {
 
 /**
  * Why a location cannot be saved, or null when it names a city.
- * "Pune, India" passes; "", "  ", "India", "india." and "IN" do not.
+ * "Pune, India" passes; "", "  ", "India", "india.", "IN" and "India, IN" do not.
  */
 export function locationProblem(
   location: string | null | undefined
 ): LocationProblem | null {
-  const normalized = (location ?? '')
-    .trim()
-    .replace(/[\s.,;:!]+$/, '')
-    .toLowerCase();
-  if (!normalized) return 'blank';
-  if (COUNTRY_ONLY_LOCATIONS.has(normalized)) return 'countryOnly';
+  // Split into words, dropping punctuation anywhere, so "India, IN",
+  // ", India" and "India (IN)" are judged by their words alone. \p{M} keeps
+  // combining marks (e.g. Devanagari vowel signs) inside their word.
+  const words = (location ?? '')
+    .toLowerCase()
+    .split(/[^\p{L}\p{M}\p{N}]+/u)
+    .filter(Boolean);
+  if (words.length === 0) return 'blank';
+  // Every word names the country: no city in there.
+  if (words.every(w => COUNTRY_ONLY_LOCATIONS.has(w))) return 'countryOnly';
   return null;
 }

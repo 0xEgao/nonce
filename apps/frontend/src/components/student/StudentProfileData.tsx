@@ -129,10 +129,12 @@ const StudentProfileData: React.FC = () => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showEmailPopup, setShowEmailPopup] = useState(false);
-  // A blank location is only flagged once the user tries to save; a country-only
-  // one ("India") is flagged straight away, so someone sent here by the join
-  // gate sees which field needs fixing.
+  // Location problems show once the user leaves the field or tries to save, so
+  // typing "Indore" doesn't flash a country-only error at "In". The exception
+  // is a saved "India": that shows straight away, so someone sent here by the
+  // join gate sees which field needs fixing.
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [locationBlurred, setLocationBlurred] = useState(false);
   const [notification, setNotification] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
     message: '',
@@ -220,8 +222,11 @@ const StudentProfileData: React.FC = () => {
   }
 
   const locationIssue = locationProblem(profile.location);
+  const isSavedLocation = (profile.location ?? '') === (userData?.location ?? '');
   const shownLocationIssue =
-    locationIssue === 'countryOnly' || (locationIssue === 'blank' && submitAttempted) ? locationIssue : null;
+    submitAttempted || locationBlurred || (locationIssue === 'countryOnly' && isSavedLocation)
+      ? locationIssue
+      : null;
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#000', p: { xs: 2, sm: 3 } }}>
@@ -260,6 +265,7 @@ const StudentProfileData: React.FC = () => {
                   name="location"
                   value={profile.location || ''}
                   onChange={handleInputChange}
+                  onBlur={() => setLocationBlurred(true)}
                   // No native `required`: the browser would block submit on an
                   // empty field before handleSubmit runs, so our "Please enter
                   // your city." message would never show. Keep the a11y hint.

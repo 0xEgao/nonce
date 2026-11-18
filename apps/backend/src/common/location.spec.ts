@@ -8,6 +8,9 @@ describe('locationProblem', () => {
         ['Kiambu, Kenya', null],
         ['Indore', null],
         ['India Gate, Delhi', null],
+        ['Indore, IN', null],
+        ['New Delhi, India', null],
+        ['Republic of India', null],
         ['', 'blank'],
         ['   ', 'blank'],
         [null, 'blank'],
@@ -19,6 +22,11 @@ describe('locationProblem', () => {
         ['IN', 'countryOnly'],
         ['Ind', 'countryOnly'],
         ['Bharat', 'countryOnly'],
+        ['India, IN', 'countryOnly'],
+        [', India', 'countryOnly'],
+        ['India (IN)', 'countryOnly'],
+        ['Bharat / India', 'countryOnly'],
+        ['...', 'blank'],
     ])('%p -> %p', (location, expected) => {
         expect(locationProblem(location)).toBe(expected);
     });
