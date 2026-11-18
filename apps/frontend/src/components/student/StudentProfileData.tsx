@@ -260,7 +260,10 @@ const StudentProfileData: React.FC = () => {
                   name="location"
                   value={profile.location || ''}
                   onChange={handleInputChange}
-                  required
+                  // No native `required`: the browser would block submit on an
+                  // empty field before handleSubmit runs, so our "Please enter
+                  // your city." message would never show. Keep the a11y hint.
+                  slotProps={{ htmlInput: { 'aria-required': true } }}
                   size="small"
                   placeholder="City, Country"
                   error={shownLocationIssue !== null}

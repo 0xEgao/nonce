@@ -33,16 +33,13 @@ describe('IsCityLocation on PATCH /users/me (UpdateUserRequest)', () => {
     );
 });
 
-describe('IsCityLocation on fellowship applications', () => {
-    it('lets a draft save a blank location', () => {
+// Drafts autosave a location prefilled from the profile; rejecting it here
+// would block every save for profiles that still say "India". Submit enforces
+// the rule instead (see fellowship-applications.service.spec.ts).
+describe('fellowship application drafts', () => {
+    it.each([[''], [' India ']])('accept %p', (location) => {
         expect(
-            locationErrors(CreateFellowshipApplicationRequestDto, ''),
+            locationErrors(CreateFellowshipApplicationRequestDto, location),
         ).toEqual([]);
-    });
-
-    it('rejects a country-only location even on a draft', () => {
-        expect(
-            locationErrors(CreateFellowshipApplicationRequestDto, ' India '),
-        ).toHaveLength(1);
     });
 });

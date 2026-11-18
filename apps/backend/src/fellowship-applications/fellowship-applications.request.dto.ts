@@ -1,4 +1,3 @@
-import { IsCityLocation } from '@/validators/is-city-location';
 import {
     ArrayMaxSize,
     IsArray,
@@ -232,13 +231,15 @@ export class ProposalFieldsDto {
     // Profile field: written through to the applicant's user profile rather
     // than stored on the application (see service), so it is never duplicated.
     // Limit mirrors UpdateUserRequest.location. Required at submit on all tracks.
-    // Blank is allowed here so drafts can save an unfilled field; a value that
-    // names only the country is not, since it is written through to the profile.
+    // Deliberately not @IsCityLocation: the form prefills this from the profile
+    // and autosaves every draft, so for a profile that still says "India" the
+    // rule would reject every save, starting on the Proposal step, where the
+    // Location field isn't shown. The rule is enforced where the applicant can
+    // act on it: the "About you" step in the form, and submit() on the server.
     @IsOptional()
     @Transform(trim)
     @IsString()
     @MaxLength(255)
-    @IsCityLocation({ allowBlank: true })
     location?: string;
 
     // Profile field: the applicant's name used on the certificate. Written
