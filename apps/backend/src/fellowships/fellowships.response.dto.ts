@@ -146,6 +146,8 @@ export class PublicFellowResponseDto {
     projectGithubLink!: string | null;
     type!: FellowshipType;
     kind!: FellowshipKind;
+    startDate!: string | null;
+    endDate!: string | null;
 
     constructor(obj: PublicFellowResponseDto) {
         this.id = obj.id;
@@ -155,6 +157,8 @@ export class PublicFellowResponseDto {
         this.projectGithubLink = obj.projectGithubLink;
         this.type = obj.type;
         this.kind = obj.kind;
+        this.startDate = obj.startDate;
+        this.endDate = obj.endDate;
     }
 
     static fromEntity(fellowship: Fellowship): PublicFellowResponseDto {
@@ -166,6 +170,8 @@ export class PublicFellowResponseDto {
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
+            startDate: fellowship.startDate?.toISOString() ?? null,
+            endDate: fellowship.endDate?.toISOString() ?? null,
         });
     }
 }

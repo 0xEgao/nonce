@@ -138,6 +138,9 @@ describe('FellowshipsService — listPublicFellows', () => {
         type: FellowshipType.DEVELOPER,
         kind: FellowshipKind.STARTER_GRANT,
         status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-02-01T00:00:00.000Z'),
+        endDate: new Date('2026-08-01T00:00:00.000Z'),
+        amountUsd: '6000.00',
         createdAt: new Date('2026-01-01'),
         updatedAt: new Date('2026-01-01'),
         user: {
@@ -218,6 +221,8 @@ describe('FellowshipsService — listPublicFellows', () => {
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
+            startDate: '2026-02-01T00:00:00.000Z',
+            endDate: '2026-08-01T00:00:00.000Z',
         });
     });
 });
