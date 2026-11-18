@@ -86,9 +86,15 @@ export const toCohortRow = <TCohort extends CohortLike>(cohort: TCohort, now = n
   };
 };
 
-export const groupCohortsByStatus = <TRow extends { status: string }>(rows: TRow[]) => ({
+// Upcoming cohorts are listed soonest-first: the API returns cohorts in creation
+// order, which says nothing about which one a student can join next. Rows with
+// the same start date keep their incoming order (Array.prototype.sort is stable).
+// Active and Completed are left in the order they arrive.
+export const groupCohortsByStatus = <TRow extends { status: string; startDate: string }>(rows: TRow[]) => ({
   Active: rows.filter((row) => row.status === 'Active'),
-  Upcoming: rows.filter((row) => row.status === 'Upcoming'),
+  Upcoming: rows
+    .filter((row) => row.status === 'Upcoming')
+    .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()),
   Completed: rows.filter((row) => row.status === 'Completed'),
 });
 
