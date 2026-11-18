@@ -6,6 +6,7 @@ import {
     CohortType,
 } from '@/common/enum';
 import { Fellowship } from '@/entities/fellowship.entity';
+import { GITHUB_URL_RE } from '@/fellowship-applications/proposal-validation';
 
 export class FellowshipResponseDto {
     id!: string;
@@ -129,18 +130,32 @@ export class FellowshipResponseDto {
     }
 }
 
+// The fellow's GitHub handle for the public list. The profile URL is the live
+// value -- the application form writes it and the fellow can edit it later from
+// their profile -- so it wins; the handle frozen on the application is only the
+// fallback for a profile URL that is missing or is not a plain profile link (an
+// org repo, a gist, another host). The public githubProfileUrl is rebuilt from
+// this one handle, so the two fields can never name different accounts.
+function publicGithubUsername(fellowship: Fellowship): string | null {
+    const match = fellowship.user.githubProfileUrl?.trim().match(GITHUB_URL_RE);
+    if (match) return match[2];
+    return fellowship.application.github?.trim() || null;
+}
+
 /**
- * A fellow as shown on the public showcase, with member identity and
- * application detail reduced to what a visitor without a login should see.
+ * A fellow as shown on the public showcase (Bitshala website, newsletter),
+ * with member identity and application detail reduced to what a visitor
+ * without a login should see.
  *
  * Hand-written projection: Fellowship and FellowshipApplication carry email,
- * location, mentor contact, and application essay fields, so an Object.assign
- * or a spread would copy those straight through. Naming every field is what
- * keeps them out.
+ * location, mentor contact, grant amount and application essay fields, so an
+ * Object.assign or a spread would copy those straight through. Naming every
+ * field is what keeps them out.
  */
 export class PublicFellowResponseDto {
     id!: string;
     displayName!: string;
+    githubUsername!: string | null;
     githubProfileUrl!: string | null;
     projectName!: string | null;
     projectGithubLink!: string | null;
@@ -152,6 +167,7 @@ export class PublicFellowResponseDto {
     constructor(obj: PublicFellowResponseDto) {
         this.id = obj.id;
         this.displayName = obj.displayName;
+        this.githubUsername = obj.githubUsername;
         this.githubProfileUrl = obj.githubProfileUrl;
         this.projectName = obj.projectName;
         this.projectGithubLink = obj.projectGithubLink;
@@ -162,17 +178,20 @@ export class PublicFellowResponseDto {
     }
 
     static fromEntity(fellowship: Fellowship): PublicFellowResponseDto {
+        const application = fellowship.application;
+        const githubUsername = publicGithubUsername(fellowship);
         return new PublicFellowResponseDto({
             id: fellowship.id,
             displayName: fellowship.user.displayName,
-            githubProfileUrl: fellowship.user.githubProfileUrl,
+            githubUsername,
+            githubProfileUrl: githubUsername
+                ? `https://github.com/${githubUsername}`
+                : null,
             // Many fellowships have no onboarding projectName; the proposal
             // title is what the admin screens show in that case, so the public
             // list falls back to it too rather than showing a blank project.
-            projectName:
-                fellowship.application.projectName ||
-                fellowship.application.title,
-            projectGithubLink: fellowship.application.projectGithubLink,
+            projectName: application.projectName || application.title,
+            projectGithubLink: application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
             startDate: fellowship.startDate?.toISOString() ?? null,

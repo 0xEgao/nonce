@@ -153,6 +153,7 @@ describe('FellowshipsService — listPublicFellows', () => {
         application: {
             id: 'app-1',
             type: FellowshipType.DESIGNER,
+            github: 'alice-dev',
             title: 'Proposal title',
             projectName: 'Project',
             projectGithubLink: 'https://github.com/alice/project',
@@ -217,7 +218,9 @@ describe('FellowshipsService — listPublicFellows', () => {
         expect({ ...result.records[0] }).toStrictEqual({
             id: fellowship.id,
             displayName: fellowship.user.displayName,
-            githubProfileUrl: fellowship.user.githubProfileUrl,
+            // The profile URL wins over the application's older handle.
+            githubUsername: 'alice',
+            githubProfileUrl: 'https://github.com/alice',
             projectName: fellowship.application.projectName,
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
@@ -247,6 +250,36 @@ describe('FellowshipsService — listPublicFellows', () => {
             endDate: null,
         });
     });
+
+    // githubUsername and githubProfileUrl must always name the same account.
+    it.each([
+        // [profile URL, application handle, expected username]
+        ['https://GitHub.com/Alice/', 'alice-dev', 'Alice'],
+        ['https://github.com/alice/project', 'alice-dev', 'alice-dev'],
+        [null, 'alice-dev', 'alice-dev'],
+        ['https://gitlab.com/alice', null, null],
+        [null, null, null],
+    ])(
+        'derives one GitHub identity from profile %s and handle %s',
+        async (githubProfileUrl, github, expected) => {
+            const row = {
+                ...fellowship,
+                user: { ...fellowship.user, githubProfileUrl },
+                application: { ...fellowship.application, github },
+            };
+            fellowshipRepository.findAndCount.mockResolvedValue([[row], 1]);
+
+            const result = await service.listPublicFellows({
+                page: 0,
+                pageSize: 20,
+            });
+
+            expect(result.records[0].githubUsername).toBe(expected);
+            expect(result.records[0].githubProfileUrl).toBe(
+                expected ? `https://github.com/${expected}` : null,
+            );
+        },
+    );
 });
 
 describe('FellowshipsService — completeEndedFellowships', () => {
