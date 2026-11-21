@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Controller,
+  useController,
   useForm,
   useWatch,
   type Control,
@@ -54,13 +55,26 @@ import {
   useSubmitApplication,
   useUpdateApplication,
 } from '../../hooks/fellowshipHooks';
-import { useUpdateUser, useUser } from '../../hooks/userHooks';
+import { useLocationSuggestion, useUpdateUser, useUser } from '../../hooks/userHooks';
+import LocationFields from '../../components/location/LocationFields';
+import {
+  locationProblemField,
+  suggestionToLocationParts,
+  type LocationField,
+} from '../../components/location/locationParts';
 import {
   FellowshipApplicationStatus,
   FellowshipType,
   type FellowshipApplicationProposalWriteDto,
 } from '../../types/fellowship';
-import { CohortType, EducationCategory, LOCATION_PROBLEM_MESSAGES, locationProblem } from '@nonce/shared';
+import {
+  CITY_MAX_LENGTH,
+  CohortType,
+  EducationCategory,
+  LOCATION_PROBLEM_MESSAGES,
+  composeLocation,
+  locationProblem,
+} from '@nonce/shared';
 import { cohortTypeToName } from '../../helpers/cohortHelpers';
 import { COHORT_TYPES } from '../../utils/cohortUtils';
 import fellowshipService from '../../services/fellowshipService';
@@ -90,9 +104,16 @@ const TITLE_LIMIT = 120;
 // overall limit can't be tripped from the UI.
 const LINK_LIMIT = 500;
 const MAX_LINKS = 20;
-// Free-text location (profile field), per-entry cap and count cap for the
+// Certificate name (profile field), per-entry cap and count cap for the
 // multi-value chip fields (domains, coding languages, education interests).
-const LOCATION_LIMIT = 255;
+const NAME_LIMIT = 255;
+// The form field holding each profile location part. Prefixed because `city`
+// is the educator's meetup city.
+const LOCATION_FORM_FIELD = {
+  country: 'locationCountry',
+  state: 'locationState',
+  city: 'locationCity',
+} as const satisfies Record<LocationField, keyof ProposalFields>;
 // Client-side sanity check only — the backend's @IsEmail() is the real gate.
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const TAG_LIMIT = 100;
@@ -223,21 +244,17 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
       projectGithubLink: z
         .string()
         .max(LINK_LIMIT, { message: 'This link is too long.' }),
-      // About you
-      location: z
+      // About you. The location parts are checked together in superRefine.
+      locationCountry: z.string(),
+      locationState: z.string(),
+      locationCity: z
         .string()
-        .trim()
-        .min(1, { message: 'Location is required.' })
-        .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` })
-        // Same rule as the profile form and the API: name a city, not just "India".
-        .refine((value) => locationProblem(value) !== 'countryOnly', {
-          message: LOCATION_PROBLEM_MESSAGES.countryOnly,
-        }),
+        .max(CITY_MAX_LENGTH, { message: `Keep this under ${CITY_MAX_LENGTH} characters.` }),
       certificateName: z
         .string()
         .trim()
         .min(1, { message: 'Name is required.' })
-        .max(LOCATION_LIMIT, { message: `Keep this under ${LOCATION_LIMIT} characters.` }),
+        .max(NAME_LIMIT, { message: `Keep this under ${NAME_LIMIT} characters.` }),
       academicBackground: requiredLongText('Academic background'),
       graduationYear: z.string(),
       professionalExperience: requiredLongText('Professional experience'),
@@ -320,6 +337,21 @@ const makeApplicationSchema = (type: FellowshipType | null) => {
       } else {
         const ghError = validateGithub(gh);
         if (ghError) ctx.addIssue({ code: 'custom', path: ['github'], message: ghError });
+      }
+
+      // Same rule as the profile form and the API: a known country, and in
+      // India a state and a city. The message goes on the part that's missing.
+      const locationIssue = locationProblem({
+        country: data.locationCountry,
+        state: data.locationState,
+        city: data.locationCity,
+      });
+      if (locationIssue) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [LOCATION_FORM_FIELD[locationProblemField(locationIssue)]],
+          message: LOCATION_PROBLEM_MESSAGES[locationIssue],
+        });
       }
 
       // Cross-field check: flag links that duplicate an earlier one.
@@ -488,7 +520,9 @@ const EDIT_STEPS: {
     sections: ['about'],
     fields: ({ isDeveloper, isEducator }) => {
       const f: (keyof ProposalFields)[] = [
-        'location',
+        'locationCountry',
+        'locationState',
+        'locationCity',
         'certificateName',
         'graduationYear',
         'academicBackground',
@@ -566,8 +600,8 @@ const Apply = () => {
   const loadedApp = useApplication(activeId ?? '', { enabled: !!activeId });
   const loadedProposal = useApplicationProposal(activeId ?? '', { enabled: !!activeId });
   const myApplicationsQuery = useMyApplications({ page: 0, pageSize: 20 });
-  // `location` is a profile field, not stored on the application — prefill it
-  // from the fellow's profile and write it back through on submit.
+  // The location is a profile field, not stored on the application — prefill it
+  // from the fellow's profile and write it back through with the draft.
   const profileQuery = useUser();
 
   const createMut = useCreateApplication();
@@ -640,12 +674,24 @@ const Apply = () => {
     if (hydratedFor.current === activeId) return;
     if (loadedProposal.data) {
       const parsed = proposalDtoToFields(loadedProposal.data);
+      // The profile fields aren't on the proposal, so reset() would blank
+      // them. When the profile is already loaded, overlay it here: the
+      // prefill effect below has already run for this draft (bailing out
+      // while it waited for hydration) and won't run again on its own.
+      const profile = profileQuery.data;
+      if (profile) {
+        parsed.locationCountry = profile.country ?? '';
+        parsed.locationState = profile.state ?? '';
+        parsed.locationCity = profile.city ?? '';
+        parsed.certificateName = profile.name ?? '';
+        locationSeededFor.current = activeId;
+      }
       reset(parsed);
       hydratedFor.current = activeId;
       // Seed the autosave baseline so hydration doesn't trigger a redundant save.
       lastSavedRef.current = { id: activeId, key: JSON.stringify(buildProposalBody(parsed)) };
     }
-  }, [activeId, loadedProposal.data, reset]);
+  }, [activeId, loadedProposal.data, profileQuery.data, reset]);
 
   // Prefill the location and name fields from the fellow's profile once, when the profile
   // loads and the user hasn't typed one. Keyed per editor so switching drafts
@@ -656,8 +702,11 @@ const Apply = () => {
     const key = activeId ?? 'new';
     if (locationSeededFor.current === key) return;
     locationSeededFor.current = key;
-    if (!getValues('location') && profileQuery.data.location) {
-      setValue('location', profileQuery.data.location);
+    const { country, state, city } = profileQuery.data;
+    if (!getValues('locationCountry') && country) {
+      setValue('locationCountry', country);
+      setValue('locationState', state ?? '');
+      setValue('locationCity', city ?? '');
     }
     if (!getValues('certificateName') && profileQuery.data.name) {
       setValue('certificateName', profileQuery.data.name);
@@ -748,6 +797,40 @@ const Apply = () => {
     currentApp?.status === FellowshipApplicationStatus.DRAFT ||
     currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
   const isResubmit = currentApp?.status === FellowshipApplicationStatus.CHANGES_REQUESTED;
+
+  // With no country on the profile, fall back to a guess from the request IP —
+  // once per editor, only into an empty field, and only once the About you
+  // card is on screen, so a guess the applicant never saw isn't autosaved to
+  // their profile. Errors are ignored: they just pick by hand.
+  const aboutStep = EDIT_STEPS.findIndex((s) => s.sections.includes('about')) + 1;
+  const wantsLocationSuggestion =
+    !!profileQuery.data && !profileQuery.data.country && isEditable;
+  const locationSuggestion = useLocationSuggestion({ enabled: wantsLocationSuggestion });
+  const suggestionSeededFor = useRef<string | null>(null);
+  const [locationAutofilled, setLocationAutofilled] = useState(false);
+  useEffect(() => {
+    if (!wantsLocationSuggestion || step !== aboutStep) return;
+    const key = activeId ?? 'new';
+    // Wait for the profile prefill (and draft hydration) for this editor.
+    if (locationSeededFor.current !== key) return;
+    if (suggestionSeededFor.current === key) return;
+    const parts = suggestionToLocationParts(locationSuggestion.data);
+    if (!parts) return;
+    suggestionSeededFor.current = key;
+    if (getValues('locationCountry')) return;
+    setValue('locationCountry', parts.country ?? '', { shouldDirty: true });
+    setValue('locationState', parts.state ?? '', { shouldDirty: true });
+    setValue('locationCity', parts.city ?? '', { shouldDirty: true });
+    setLocationAutofilled(true);
+  }, [
+    wantsLocationSuggestion,
+    step,
+    aboutStep,
+    activeId,
+    locationSuggestion.data,
+    getValues,
+    setValue,
+  ]);
 
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoSaveInFlight = useRef(false);
@@ -848,6 +931,8 @@ const Apply = () => {
     openedEditorFor.current = null;
     hydratedFor.current = null;
     locationSeededFor.current = null;
+    suggestionSeededFor.current = null;
+    setLocationAutofilled(false);
     setActiveId(null);
     reset(EMPTY_FIELDS);
     setSelectedType(null);
@@ -1090,6 +1175,8 @@ const Apply = () => {
           onEmailBlur={handleEmailBlur}
           emailError={emailError}
           emailSaving={updateUserMut.isPending}
+          locationAutofilled={locationAutofilled}
+          onLocationEdit={() => setLocationAutofilled(false)}
         />
       )}
 
@@ -1388,7 +1475,6 @@ type TextFieldName =
   | 'mentorTestimonial'
   | 'projectName'
   | 'projectGithubLink'
-  | 'location'
   | 'certificateName'
   | 'academicBackground'
   | 'graduationYear'
@@ -1443,6 +1529,59 @@ const ControlledTextField = ({
     )}
   />
 );
+
+// The profile location (country, then state and city for India) bound to its
+// three form fields. Each part keeps its own touched state, so an error shows
+// under the part that's missing once that part is left or on Continue.
+const ControlledLocationFields = ({
+  control,
+  disabled,
+  autofilled,
+  onEdit,
+}: {
+  control: Control<ProposalFields>;
+  disabled: boolean;
+  autofilled: boolean;
+  onEdit: () => void;
+}) => {
+  const country = useController({ control, name: LOCATION_FORM_FIELD.country });
+  const state = useController({ control, name: LOCATION_FORM_FIELD.state });
+  const city = useController({ control, name: LOCATION_FORM_FIELD.city });
+  const parts = { country, state, city };
+  return (
+    <Box sx={{ mb: 0.5 }}>
+      <LocationFields
+        value={{
+          country: (country.field.value as string) || null,
+          state: (state.field.value as string) || null,
+          city: (city.field.value as string) || null,
+        }}
+        onChange={(next) => {
+          country.field.onChange(next.country ?? '');
+          state.field.onChange(next.state ?? '');
+          city.field.onChange(next.city ?? '');
+          onEdit();
+        }}
+        onBlur={(field) => parts[field].field.onBlur()}
+        errors={{
+          country: country.fieldState.error?.message,
+          state: state.fieldState.error?.message,
+          city: city.fieldState.error?.message,
+        }}
+        inputRefs={{
+          country: country.field.ref,
+          state: state.field.ref,
+          city: city.field.ref,
+        }}
+        disabled={disabled}
+        autofilled={autofilled}
+        renderLabel={(label, required) => (
+          <FieldLabel>{required ? label : `${label} (optional)`}</FieldLabel>
+        )}
+      />
+    </Box>
+  );
+};
 
 // A multi-value dropdown (domains / coding languages / education interests).
 // Users pick one or more entries from a fixed list; selecting an option commits
@@ -1607,6 +1746,8 @@ const ApplicationStep = ({
   onEmailBlur,
   emailError,
   emailSaving,
+  locationAutofilled,
+  onLocationEdit,
 }: {
   form: UseFormReturn<ProposalFields>;
   disabled: boolean;
@@ -1634,6 +1775,9 @@ const ApplicationStep = ({
   onEmailBlur: () => void;
   emailError: string | null;
   emailSaving: boolean;
+  /** The location was prefilled from the request IP and not edited since. */
+  locationAutofilled: boolean;
+  onLocationEdit: () => void;
 }) => {
   const { control, getValues, setValue, formState } = form;
   const links = (useWatch({ control, name: 'links' }) as string[] | undefined) ?? [''];
@@ -2067,7 +2211,7 @@ const ApplicationStep = ({
                 fullWidth
                 disabled={disabled}
                 placeholder="John Doe"
-                slotProps={{ htmlInput: { maxLength: LOCATION_LIMIT } }}
+                slotProps={{ htmlInput: { maxLength: NAME_LIMIT } }}
               />
             </Box>
             <Box sx={{ flex: 2, mb: 2.5 }}>
@@ -2084,18 +2228,13 @@ const ApplicationStep = ({
                 helperText={emailError ?? (emailSaving ? 'Saving…' : "This is the address we'll use to contact you.")}
               />
             </Box>
+          <ControlledLocationFields
+            control={control}
+            disabled={disabled}
+            autofilled={locationAutofilled}
+            onEdit={onLocationEdit}
+          />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 0, sm: 2 }}>
-            <Box sx={{ flex: 2 }}>
-              <FieldLabel>Location</FieldLabel>
-              <ControlledTextField
-                control={control}
-                name="location"
-                fullWidth
-                disabled={disabled}
-                placeholder="Bengaluru, India"
-                slotProps={{ htmlInput: { maxLength: LOCATION_LIMIT } }}
-              />
-            </Box>
             <Box sx={{ flex: 1 }}>
               <FieldLabel>Graduation year</FieldLabel>
               <ControlledTextField
@@ -2698,7 +2837,16 @@ const ReviewStep = ({
           </Box>
         )}
         <ReviewText label="Name" value={fields.certificateName} />
-        <ReviewText label="Location" value={fields.location} />
+        <ReviewText
+          label="Location"
+          value={
+            composeLocation({
+              country: fields.locationCountry,
+              state: fields.locationState,
+              city: fields.locationCity,
+            }) ?? ''
+          }
+        />
         <ReviewText label="Graduation year" value={fields.graduationYear} />
         <ReviewLong label="Academic background" text={fields.academicBackground} />
         <ReviewLong label="Professional experience" text={fields.professionalExperience} />

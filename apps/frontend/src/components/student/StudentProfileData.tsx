@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -16,8 +16,21 @@ import {
   Alert,
 } from '@mui/material';
 import { AlertTriangle } from 'lucide-react';
-import { useUser, useUpdateUser } from '../../hooks/userHooks';
-import { LOCATION_PROBLEM_MESSAGES, locationProblem } from '@nonce/shared';
+import { useLocationSuggestion, useUser, useUpdateUser } from '../../hooks/userHooks';
+import {
+  composeLocation,
+  LOCATION_PROBLEM_MESSAGES,
+  locationProblem,
+  normalizeLocationParts,
+  type LocationParts,
+} from '@nonce/shared';
+import LocationFields from '../location/LocationFields';
+import {
+  locationProblemErrors,
+  locationProblemField,
+  suggestionToLocationParts,
+  type LocationField,
+} from '../location/locationParts';
 
 interface UserProfile {
   id: string;
@@ -36,7 +49,11 @@ interface UserProfile {
   bitcoinBooksRead: string[];
   whyBitcoin: string | null;
   weeklyCohortCommitmentHours: number | null;
+  // Read-only display string; saving sends the parts below instead.
   location: string | null;
+  country: string | null;
+  state: string | null;
+  city: string | null;
   referral: string | null;
 }
 
@@ -124,17 +141,38 @@ const sectionSx = {
 const labelSx = { fontWeight: 600, color: '#d4d4d8', mb: 1, fontSize: '0.875rem' };
 const hintSx = { color: '#71717a', fontSize: '0.75rem', mt: 0.5 };
 
+// The location dropdowns: autocompleteSx, padded to the height of the text
+// inputs above (inputSx's 12px vertical input padding), plus the disabled look.
+const locationInputSx = {
+  ...autocompleteSx,
+  '& .MuiOutlinedInput-root.MuiInputBase-sizeSmall': { py: '9.5px', pl: 1 },
+  '& .MuiOutlinedInput-root.Mui-disabled': inputSx['& .MuiOutlinedInput-root.Mui-disabled'],
+};
+
+const dropdownPaperSx = {
+  bgcolor: '#18181b',
+  border: '1px solid #27272a',
+  '& .MuiAutocomplete-option': { color: '#fafafa', '&:hover': { bgcolor: 'rgba(249,115,22,0.15)' } },
+  '& .MuiAutocomplete-option[aria-selected="true"]': { bgcolor: 'rgba(249,115,22,0.1)' },
+  '& .MuiAutocomplete-noOptions, & .MuiAutocomplete-loading': { color: '#71717a' },
+};
+
 const StudentProfileData: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [showEmailPopup, setShowEmailPopup] = useState(false);
-  // Location problems show once the user leaves the field or tries to save, so
-  // typing "Indore" doesn't flash a country-only error at "In". The exception
-  // is a saved "India": that shows straight away, so someone sent here by the
-  // join gate sees which field needs fixing.
+  // A location problem shows under the part that's missing once the user
+  // leaves that part or tries to save. The exception is a saved location that's
+  // incomplete: that shows straight away, so someone sent here by the join
+  // gate sees which field needs fixing.
   const [submitAttempted, setSubmitAttempted] = useState(false);
-  const [locationBlurred, setLocationBlurred] = useState(false);
+  const [blurredLocationFields, setBlurredLocationFields] = useState<ReadonlySet<LocationField>>(
+    () => new Set()
+  );
+  // Set when the location was prefilled from the request IP; cleared by any edit.
+  const [locationAutofilled, setLocationAutofilled] = useState(false);
+  const locationAutofillDone = useRef(false);
   const [notification, setNotification] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
     show: false,
     message: '',
@@ -143,6 +181,13 @@ const StudentProfileData: React.FC = () => {
 
   const { data: userData, isLoading: isLoadingUser } = useUser();
   const { mutate: updateUser, isPending: isUpdating } = useUpdateUser();
+
+  // With no country saved, guess one from the request IP — once, only while
+  // the user hasn't picked one, and silently skipped if it fails.
+  const wantsLocationSuggestion = !!userData && !userData.country;
+  const { data: locationSuggestion } = useLocationSuggestion({
+    enabled: wantsLocationSuggestion,
+  });
 
   useEffect(() => {
     if (userData) {
@@ -153,6 +198,22 @@ const StudentProfileData: React.FC = () => {
       });
     }
   }, [userData]);
+
+  useEffect(() => {
+    if (locationAutofillDone.current || !wantsLocationSuggestion || !profile || profile.country) return;
+    const parts = suggestionToLocationParts(locationSuggestion);
+    if (!parts) return;
+    locationAutofillDone.current = true;
+    setProfile(prev => (prev && !prev.country ? { ...prev, ...parts } : prev));
+    setLocationAutofilled(true);
+  }, [locationSuggestion, wantsLocationSuggestion, profile]);
+
+  const handleLocationChange = (next: LocationParts) => {
+    // Any edit wins over the IP guess, including clearing the country.
+    locationAutofillDone.current = true;
+    setLocationAutofilled(false);
+    setProfile(prev => (prev ? { ...prev, ...next } : prev));
+  };
 
   useEffect(() => {
     if (location.state?.showEmailPopup) {
@@ -178,7 +239,8 @@ const StudentProfileData: React.FC = () => {
     if (!profile) return;
     setSubmitAttempted(true);
 
-    const locationIssue = locationProblem(profile.location);
+    const parts = normalizeLocationParts(profile);
+    const locationIssue = locationProblem(parts);
     if (locationIssue) {
       setNotification({ show: true, message: LOCATION_PROBLEM_MESSAGES[locationIssue], type: 'error' });
       return;
@@ -194,7 +256,10 @@ const StudentProfileData: React.FC = () => {
       return;
     }
 
-    updateUser(profile, {
+    // `location` is composed server-side from the parts; it isn't writable.
+    const payload: Omit<UserProfile, 'location'> & { location?: string | null } = { ...profile, ...parts };
+    delete payload.location;
+    updateUser(payload, {
       onSuccess: () => {
         setNotification({ show: true, message: 'Profile updated successfully!', type: 'success' });
         setTimeout(() => navigate('/myDashboard'), 1200);
@@ -221,11 +286,23 @@ const StudentProfileData: React.FC = () => {
     );
   }
 
-  const locationIssue = locationProblem(profile.location);
-  const isSavedLocation = (profile.location ?? '') === (userData?.location ?? '');
+  const locationIssue = locationProblem(normalizeLocationParts(profile));
+  // Only for a location the user saved (old free text, or parts from before a
+  // rule change); a brand-new profile isn't flagged before they touch it.
+  const savedLocationIncomplete =
+    !!userData && !!(userData.location || userData.country) && locationProblem(normalizeLocationParts(userData)) !== null;
   const shownLocationIssue =
-    submitAttempted || locationBlurred || (locationIssue === 'countryOnly' && isSavedLocation)
+    locationIssue &&
+    (submitAttempted ||
+      savedLocationIncomplete ||
+      blurredLocationFields.has(locationProblemField(locationIssue)))
       ? locationIssue
+      : null;
+  // Free text from before the dropdowns that the backfill couldn't fully read
+  // ("India", "Aurangabad"), shown so the user knows what to pick.
+  const legacyLocation =
+    savedLocationIncomplete && userData?.location !== composeLocation(normalizeLocationParts(userData))
+      ? userData?.location?.trim()
       : null;
 
   return (
@@ -257,31 +334,6 @@ const StudentProfileData: React.FC = () => {
                   sx={inputSx}
                 />
                 <Typography sx={hintSx}>This name will appear on your certificate.</Typography>
-              </Box>
-              <Box>
-                <Typography variant="body2" sx={labelSx}>Location*</Typography>
-                <TextField
-                  fullWidth
-                  name="location"
-                  value={profile.location || ''}
-                  onChange={handleInputChange}
-                  onBlur={() => setLocationBlurred(true)}
-                  // No native `required`: the browser would block submit on an
-                  // empty field before handleSubmit runs, so our "Please enter
-                  // your city." message would never show. Keep the a11y hint.
-                  slotProps={{ htmlInput: { 'aria-required': true } }}
-                  size="small"
-                  placeholder="City, Country"
-                  error={shownLocationIssue !== null}
-                  sx={inputSx}
-                />
-                {shownLocationIssue ? (
-                  <Typography role="alert" sx={{ ...hintSx, color: '#f87171' }}>
-                    {LOCATION_PROBLEM_MESSAGES[shownLocationIssue]}
-                  </Typography>
-                ) : (
-                  <Typography sx={hintSx}>Your city lets us invite you to Bitshala meetups near you.</Typography>
-                )}
               </Box>
               <Box>
                 <Typography variant="body2" sx={labelSx}>Email*</Typography>
@@ -337,6 +389,47 @@ const StudentProfileData: React.FC = () => {
                   placeholder="https://www.linkedin.com/"
                   slotProps={{ htmlInput: { maxLength: 2048 } }}
                   sx={inputSx}
+                />
+              </Box>
+              {/* Spans both columns: in India it's three inputs wide. No native
+                  `required`: the browser would block submit before handleSubmit
+                  could say which part is missing. */}
+              <Box sx={{ gridColumn: '1 / -1' }}>
+                <LocationFields
+                  // Raw, not normalized: trimming here would eat the space
+                  // in "New Delhi" as it's typed.
+                  value={{ country: profile.country, state: profile.state, city: profile.city }}
+                  onChange={handleLocationChange}
+                  onBlur={field => setBlurredLocationFields(prev => new Set(prev).add(field))}
+                  errors={locationProblemErrors(shownLocationIssue)}
+                  autofilled={locationAutofilled}
+                  hint={
+                    <>
+                      {legacyLocation && (
+                        <>
+                          You previously entered “{legacyLocation}”. Please pick it from the lists.{' '}
+                        </>
+                      )}
+                      Your city lets us invite you to Bitshala meetups near you.
+                    </>
+                  }
+                  renderLabel={(label, required) => (
+                    <Typography variant="body2" sx={labelSx}>
+                      {label}
+                      {required ? '*' : ''}
+                    </Typography>
+                  )}
+                  renderHelper={(text, error) =>
+                    error ? (
+                      <Typography role="alert" sx={{ ...hintSx, color: '#f87171' }}>
+                        {text}
+                      </Typography>
+                    ) : (
+                      <Typography sx={hintSx}>{text}</Typography>
+                    )
+                  }
+                  inputSx={locationInputSx}
+                  paperSx={dropdownPaperSx}
                 />
               </Box>
             </Box>

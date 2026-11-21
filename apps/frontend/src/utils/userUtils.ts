@@ -16,8 +16,13 @@ export const isProfileComplete = (userData: GetUserResponse | undefined): boolea
     userData.bitcoinBooksRead && userData.bitcoinBooksRead.length > 0 &&
     userData.whyBitcoin &&
     userData.weeklyCohortCommitmentHours &&
-    // Must name a city, not be blank or just "India" (#45); the profile form
-    // shows which, so the join gate's redirect lands on a fixable field.
-    locationProblem(userData.location) === null
+    // A known country, and for India a state and city (#45); the profile form
+    // shows which part is missing, so the join gate's redirect lands on a
+    // fixable field. An old free-text `location` alone doesn't count.
+    locationProblem({
+      country: userData.country,
+      state: userData.state,
+      city: userData.city,
+    }) === null
   );
 };
