@@ -9,6 +9,7 @@ live here and each grade.sh calls one of them.
 
     report.py from-jest    <jest-json>     <report.json>
     report.py from-unittest <runner-json>  <report.json>
+    report.py from-rust    <cargo-log>     <report.json> <cargo-status>
     report.py single       <report.json> <passed|failed> <name> [message]
     report.py merge        <report.json> <part.json> [part.json ...]
 
@@ -161,6 +162,29 @@ def from_unittest(source, destination):
     write(destination, passed, tests)
 
 
+def from_rust(source, destination, cargo_status):
+    """Read the stable Rust test harness's pretty output for one test target."""
+    statuses = {'ok': 'passed', 'FAILED': 'failed', 'ignored': 'skipped'}
+    result_line = re.compile(r'^test ([\w:]+) \.\.\. (ok|FAILED|ignored)(?:, .*)?$')
+    with open(source, encoding='utf-8', errors='replace') as handle:
+        output = handle.read()
+
+    tests = []
+    for line in output.splitlines():
+        result = result_line.fullmatch(line)
+        if result:
+            name, status = result.groups()
+            add(tests, name, statuses[status])
+
+    if cargo_status and not any(test['status'] == 'failed' for test in tests):
+        add(tests, 'Cargo tests ran', 'failed', output[-MAX_MESSAGE_CHARS:])
+    elif not tests:
+        add(tests, 'Cargo tests ran', 'failed', 'The test harness reported no results.')
+
+    passed = cargo_status == 0 and all(test['status'] == 'passed' for test in tests)
+    write(destination, passed, tests)
+
+
 def single(destination, verdict, name, message=None):
     status = 'passed' if verdict == 'passed' else 'failed'
     tests = []
@@ -200,6 +224,8 @@ def main(argv):
             from_jest(argv[2], destination)
         elif command == 'from-unittest':
             from_unittest(argv[2], destination)
+        elif command == 'from-rust':
+            from_rust(argv[2], destination, int(argv[4]))
         elif command == 'single':
             single(destination, argv[3], argv[4], argv[5] if len(argv) > 5 else None)
         elif command == 'merge':

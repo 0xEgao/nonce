@@ -1,7 +1,7 @@
 {
   "$schema": "./cohort-config.schema.json",
+  "assignmentBackend": "INHOUSE",
   "gdSessions": 8,
-  "classroomId": "999999",
   "links": [
     {
       "label": "Assignments Repository",
@@ -11,6 +11,28 @@
   "weeks": [
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-1",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-1",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-01/Cargo.toml",
+          "weeks/week-01/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Rust Setup, Syntax, Data Structures, and Bitcoin Context",
       "readingMaterial": [
         {
@@ -73,6 +95,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-2",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-2",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-02/Cargo.toml",
+          "weeks/week-02/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Functions, Ownership, Borrowing, Structs, Enums, Pattern Matching",
       "readingMaterial": [
         {
@@ -143,6 +187,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-3",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-3",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-03/Cargo.toml",
+          "weeks/week-03/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Bitcoin Library Architecture and Domain Modeling",
       "readingMaterial": [
         {
@@ -201,6 +267,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-4",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-4",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-04/Cargo.toml",
+          "weeks/week-04/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Error Handling, Traits, Generics, and Iterators",
       "readingMaterial": [
         {
@@ -267,6 +355,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-5",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-5",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-05/Cargo.toml",
+          "weeks/week-05/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Testing, Tooling, Closures, Macros, and Serialization",
       "readingMaterial": [
         {
@@ -333,6 +443,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-6",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-6",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-07/**",
+          "weeks/week-08/**",
+          "weeks/week-06/Cargo.toml",
+          "weeks/week-06/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Smart Pointers, Interior Mutability, and CPU Mining",
       "readingMaterial": [
         {
@@ -395,6 +527,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-7",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-7",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-08/**",
+          "weeks/week-07/Cargo.toml",
+          "weeks/week-07/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Async Rust, Tokio, Networking, and Node Foundations",
       "readingMaterial": [
         {
@@ -453,6 +607,28 @@
     },
     {
       "hasExercise": true,
+      "assignment": {
+        "slug": "bbr-week-8",
+        "templateOwner": "0xEgao",
+        "templateRepo": "rust-lang-cohort-assignments",
+        "graderTestPath": "tests/bbr-week-8",
+        "protectedPaths": [
+          ".github/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "weeks/week-01/**",
+          "weeks/week-02/**",
+          "weeks/week-03/**",
+          "weeks/week-04/**",
+          "weeks/week-05/**",
+          "weeks/week-06/**",
+          "weeks/week-07/**",
+          "weeks/week-08/Cargo.toml",
+          "weeks/week-08/tests/**"
+        ],
+        "deadline": "GRADUATION",
+        "runTimeoutMinutes": 10
+      },
       "title": "Wallet CLI, Dispatch, and Design Patterns",
       "readingMaterial": [
         {
