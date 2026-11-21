@@ -84,8 +84,22 @@ export class User extends BaseEntity {
     @Column('int', { nullable: true })
     weeklyCohortCommitmentHours!: number | null;
 
+    // Display string composed from country/state/city ("Pune, Maharashtra,
+    // India"). Users who haven't re-picked since the structured fields arrived
+    // may still hold an old free-text value here with no parts.
     @Column('varchar', { length: 255, nullable: true })
     location!: string | null;
+
+    /** ISO 3166-1 alpha-2 code. */
+    @Column('varchar', { length: 2, nullable: true })
+    country!: string | null;
+
+    /** Indian state name (INDIAN_STATES in @nonce/shared); null elsewhere. */
+    @Column('varchar', { length: 100, nullable: true })
+    state!: string | null;
+
+    @Column('varchar', { length: 255, nullable: true })
+    city!: string | null;
 
     @Column('varchar', { length: 255, nullable: true })
     referral!: string | null;

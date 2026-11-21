@@ -23,6 +23,8 @@ import {
 } from '@/users/users.request';
 import { ConfigService } from '@nestjs/config';
 import { escapeLikePattern } from '@/common/common';
+import { locationColumns } from '@/common/location';
+import { sendsLocation } from '@/validators/is-complete-location';
 import { PaginatedDataDto } from '@/common/dto';
 import { ScoresService } from '@/scores/scores.service';
 import { CertificatesService } from '@/certificates/certificates.service';
@@ -321,8 +323,9 @@ export class UsersService {
         if (body.weeklyCohortCommitmentHours !== undefined) {
             user.weeklyCohortCommitmentHours = body.weeklyCohortCommitmentHours;
         }
-        if (body.location !== undefined) {
-            user.location = body.location;
+        if (sendsLocation(body)) {
+            // Validated as a unit by @IsCompleteLocation.
+            Object.assign(user, locationColumns(body));
         }
         if (body.referral !== undefined) {
             user.referral = body.referral;

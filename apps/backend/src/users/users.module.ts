@@ -6,6 +6,7 @@ import { UsersController } from '@/users/users.controller';
 import { ScoresModule } from '@/scores/scores.module';
 import { CertificatesModule } from '@/certificates/certificates.module';
 import { FellowshipsModule } from '@/fellowships/fellowships.module';
+import { GeoIpModule } from '@/geoip/geoip.module';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { FellowshipsModule } from '@/fellowships/fellowships.module';
         ScoresModule,
         CertificatesModule,
         FellowshipsModule,
+        GeoIpModule,
     ],
     providers: [UsersService],
     controllers: [UsersController],

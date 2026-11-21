@@ -244,6 +244,15 @@ class AppConfig {
     @IsBoolean()
     debug?: boolean;
 
+    // Express `trust proxy`, so `req.ip` is the client's address rather than
+    // the reverse proxy's. Needed for IP location suggestions (and makes the
+    // throttler count per client). Unset keeps Express's default (trust
+    // nothing). Behind nginx on the same host or a private network:
+    // 'loopback, linklocal, uniquelocal'. Env: APP_TRUST_PROXY.
+    @IsOptional()
+    @IsString()
+    trustProxy?: string;
+
     @IsDefined()
     @ValidateNested()
     @Type(() => AppAuthConfig)
@@ -361,6 +370,25 @@ class MailConfig {
     from: MailFromIdentity;
 }
 
+// MaxMind GeoLite2 City, used to prefill a user's location from their IP.
+// Optional: without an account ID and license key the suggestions are off.
+class GeoIpConfig {
+    // Env: GEOIP_ACCOUNT_ID.
+    @IsOptional()
+    @IsString()
+    accountId?: string;
+
+    // Env: GEOIP_LICENSE_KEY.
+    @IsOptional()
+    @IsString()
+    licenseKey?: string;
+
+    // Where the downloaded database is kept; defaults to ./data/geoip.
+    @IsOptional()
+    @IsString()
+    databaseDir?: string;
+}
+
 class MonitoringConfig {
     @IsString()
     @IsNotEmpty()
@@ -414,4 +442,9 @@ export class Config {
     @ValidateNested()
     @Type(() => MonitoringConfig)
     monitoring: MonitoringConfig;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => GeoIpConfig)
+    geoip?: GeoIpConfig;
 }

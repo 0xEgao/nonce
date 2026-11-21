@@ -3,7 +3,7 @@ import type {
   FellowshipApplicationProposalWriteDto,
 } from '../types/fellowship';
 import type { CohortType } from '@nonce/shared';
-import { EducationCategory } from '@nonce/shared';
+import { EducationCategory, normalizeLocationParts } from '@nonce/shared';
 
 // Human labels for the education category enum, shared by the application form
 // and the read-only proposal viewer so the naming stays consistent.
@@ -27,8 +27,12 @@ export type ProposalFields = {
   projectName: string;
   projectGithubLink: string;
   // About you. `graduationYear` is held as a string for the text input and
-  // parsed to an integer only when building the request body.
-  location: string;
+  // parsed to an integer only when building the request body. The location
+  // parts are profile fields (see LocationFields); `city` below is the
+  // educator's meetup city, unrelated.
+  locationCountry: string;
+  locationState: string;
+  locationCity: string;
   certificateName: string;
   academicBackground: string;
   graduationYear: string;
@@ -63,7 +67,9 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
   links: [''],
   projectName: '',
   projectGithubLink: '',
-  location: '',
+  locationCountry: '',
+  locationState: '',
+  locationCity: '',
   certificateName: '',
   academicBackground: '',
   graduationYear: '',
@@ -85,7 +91,7 @@ export const EMPTY_PROPOSAL_FIELDS: ProposalFields = {
 
 // Map the structured proposal from the API into react-hook-form state:
 // null becomes '' (or [] for multi-value fields) and an empty links list keeps
-// one blank row for the UI. `location` and `certificateName` are NOT on the proposal
+// one blank row for the UI. The location and `certificateName` are NOT on the proposal
 // — they live on the user profile, so the caller overlays them from GET
 // /users/me after this maps (certificateName from user.name).
 export const proposalDtoToFields = (
@@ -103,7 +109,9 @@ export const proposalDtoToFields = (
     links: dto.links.length > 0 ? dto.links : [''],
     projectName: dto.projectName ?? '',
     projectGithubLink: dto.projectGithubLink ?? '',
-    location: '',
+    locationCountry: '',
+    locationState: '',
+    locationCity: '',
     certificateName: '',
     academicBackground: dto.academicBackground ?? '',
     graduationYear: dto.graduationYear != null ? String(dto.graduationYear) : '',
@@ -137,6 +145,29 @@ const parseGraduationYear = (value: string): number | undefined => {
 const trimEntries = (values: string[]): string[] =>
   values.map((v) => v.trim()).filter(Boolean);
 
+// The location parts are written through to the profile, so with no country
+// picked they're left out rather than sent blank: a draft autosaved before the
+// form was seeded from the profile mustn't wipe the saved location. Once there
+// is a country all three go together, partial or not (drafts allow that).
+const locationBody = (
+  f: ProposalFields,
+): Pick<
+  FellowshipApplicationProposalWriteDto,
+  'locationCountry' | 'locationState' | 'locationCity'
+> => {
+  const parts = normalizeLocationParts({
+    country: f.locationCountry,
+    state: f.locationState,
+    city: f.locationCity,
+  });
+  if (!parts.country) return {};
+  return {
+    locationCountry: parts.country,
+    locationState: parts.state ?? '',
+    locationCity: parts.city ?? '',
+  };
+};
+
 // Build the create/update request body from form state. Everything is trimmed,
 // the GitHub handle is canonicalized to a bare username, and empty link/array
 // rows are dropped. Empty strings are sent verbatim so clearing a field persists.
@@ -153,7 +184,7 @@ export const buildProposalBody = (
   links: trimEntries(f.links),
   projectName: f.projectName.trim(),
   projectGithubLink: f.projectGithubLink.trim(),
-  location: f.location.trim(),
+  ...locationBody(f),
   certificateName: f.certificateName.trim(),
   academicBackground: f.academicBackground.trim(),
   graduationYear: parseGraduationYear(f.graduationYear),

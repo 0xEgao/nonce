@@ -85,3 +85,6 @@ apps/backend/snapshots/
 apps/backend/e2e/.logs
 /CLAUDE.md
 /skills-lock.json
+
+# MaxMind GeoLite2 database downloaded by the backend (GeoIpService)
+apps/backend/data/

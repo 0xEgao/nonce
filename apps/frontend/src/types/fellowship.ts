@@ -98,7 +98,7 @@ export interface GetFellowshipApplicationResponseDto {
 // Structured proposal as returned by GET /fellowship-applications/:id/proposal.
 // Each field is stored and validated server-side; `links` and the multi-value
 // onboarding fields are always arrays. Onboarding details now live on the
-// application itself, so the proposal carries them too. `location` is the one
+// application itself, so the proposal carries them too. The location is the one
 // exception — it's a profile field, read from GET /users/me, not the proposal.
 export interface FellowshipApplicationProposalDto {
   title: string | null;
@@ -133,11 +133,13 @@ export interface FellowshipApplicationProposalDto {
 
 // Writable proposal shape for create/update. All fields optional — drafts may be
 // partial. Sending a field as "" clears it; omitting a key leaves it untouched.
-// `location`, `certificateName` and `github` are written through to the user
-// profile by the backend (location → user.location,
-// certificateName → user.name, github → user.githubProfileUrl); github is also
-// kept on the application, but location and certificateName are not returned by
-// the proposal endpoint.
+// The location parts, `certificateName` and `github` are written through to the
+// user profile by the backend (locationCountry/State/City → user.country/state/
+// city, certificateName → user.name, github → user.githubProfileUrl); github is
+// also kept on the application, but the location and certificateName are not
+// returned by the proposal endpoint. The location parts are prefixed because
+// `city` is already the educator's meetup city. Drafts may send them partial;
+// submit checks the profile's parts with `locationProblem`.
 export interface FellowshipApplicationProposalWriteDto {
   title?: string;
   problemStatement?: string;
@@ -149,7 +151,9 @@ export interface FellowshipApplicationProposalWriteDto {
   links?: string[];
   projectName?: string;
   projectGithubLink?: string;
-  location?: string;
+  locationCountry?: string | null;
+  locationState?: string | null;
+  locationCity?: string | null;
   certificateName?: string;
   academicBackground?: string;
   graduationYear?: number;
