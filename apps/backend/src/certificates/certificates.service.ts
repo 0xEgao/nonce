@@ -4,7 +4,7 @@ import {
     Logger,
     StreamableFile,
 } from '@nestjs/common';
-import * as archiver from 'archiver';
+import * as AdmZip from 'adm-zip';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cohort } from '@/entities/cohort.entity';
@@ -393,25 +393,17 @@ export class CertificatesService {
             );
         }
 
-        const archive = archiver('zip', { zlib: { level: 5 } });
-
-        archive.on('error', (err) => {
-            throw err;
-        });
-
+        // Every PDF is already buffered in memory, so there is nothing to stream.
+        const archive = new AdmZip();
         for (const { pdfBuffer, fileName } of pdfResults) {
-            archive.append(pdfBuffer, { name: fileName });
+            archive.addFile(fileName, pdfBuffer);
         }
-
-        // Not awaited: finalize() signals no more entries, but awaiting it would deadlock
-        // since the stream has no consumer yet — NestJS drains it when piping the response.
-        archive.finalize();
 
         return {
             fileName: `certificates_${cohort.type.toLowerCase()}_s${
                 cohort.season
             }.zip`,
-            fileStream: new StreamableFile(archive),
+            fileStream: new StreamableFile(archive.toBuffer()),
         };
     }
 }
