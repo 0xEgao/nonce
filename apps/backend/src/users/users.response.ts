@@ -30,6 +30,9 @@ export class GetUserResponse {
     whyBitcoin: string | null;
     weeklyCohortCommitmentHours: number | null;
     location: string | null;
+    country: string | null;
+    state: string | null;
+    city: string | null;
     referral: string | null;
 
     constructor(partial: Partial<GetUserResponse>) {
@@ -55,6 +58,9 @@ export class GetUserResponse {
             whyBitcoin: user.whyBitcoin,
             weeklyCohortCommitmentHours: user.weeklyCohortCommitmentHours,
             location: user.location,
+            country: user.country,
+            state: user.state,
+            city: user.city,
             referral: user.referral,
         });
     }

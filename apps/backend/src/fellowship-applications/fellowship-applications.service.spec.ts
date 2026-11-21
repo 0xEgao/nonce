@@ -34,12 +34,15 @@ describe('FellowshipApplicationsService — submit validation', () => {
         sendFellowshipApplicationReceivedEmail: jest.fn(),
     };
 
-    // The authenticated applicant. `location` lives on the profile and is
+    // The authenticated applicant. The location lives on the profile and is
     // required to submit on every track.
     const applicant = {
         id: 'user-1',
         displayName: 'Alice',
-        location: 'Pune, India',
+        location: 'Pune, Maharashtra, India',
+        country: 'IN',
+        state: 'Maharashtra',
+        city: 'Pune',
         email: 'alice@example.com',
     } as unknown as User;
 
@@ -356,18 +359,51 @@ describe('FellowshipApplicationsService — submit validation', () => {
             expect(await submitError(app)).toContain('Location is required');
         });
 
-        it('rejects a profile location that names only the country', async () => {
+        it('treats an old free-text location without parts as missing', async () => {
             const app = buildApplication({
                 applicant: {
                     id: 'user-1',
                     displayName: 'Alice',
-                    location: 'India',
+                    location: 'Pune, India',
+                    country: null,
+                    state: null,
+                    city: null,
                     email: 'alice@example.com',
                 } as unknown as User,
             });
-            expect(await submitError(app)).toContain(
-                'Please enter your city, not just the country',
+            expect(await submitError(app)).toContain('Location is required');
+        });
+
+        it('requires a state and city in India', async () => {
+            const noState = buildApplication({
+                applicant: {
+                    ...applicant,
+                    state: null,
+                    city: null,
+                } as unknown as User,
+            });
+            expect(await submitError(noState)).toContain(
+                'Please choose your state.',
             );
+            const noCity = buildApplication({
+                applicant: { ...applicant, city: '  ' } as unknown as User,
+            });
+            expect(await submitError(noCity)).toContain(
+                'Please choose or type your city.',
+            );
+        });
+
+        it('accepts a country alone outside India', async () => {
+            const app = buildApplication({
+                applicant: {
+                    ...applicant,
+                    location: 'Kenya',
+                    country: 'KE',
+                    state: null,
+                    city: null,
+                } as unknown as User,
+            });
+            await expect(submit(app)).resolves.toBeUndefined();
         });
     });
 
