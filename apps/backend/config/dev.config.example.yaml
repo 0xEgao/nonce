@@ -55,6 +55,10 @@ app:
     callbackPath: '/auth/discord/callback'
     dashboardRedirectPath: '/health'
     sessionTtlSeconds: 604800 # 7 days
+  # Express `trust proxy`. Leave blank locally; behind nginx set it (env
+  # APP_TRUST_PROXY) to 'loopback, linklocal, uniquelocal' so req.ip is the
+  # client's address and IP location suggestions work.
+  trustProxy:
 github:
   token: '<github_personal_access_token>'
 # GitHub App backing the in-house classroom (assignment repos, commits, grading
@@ -95,3 +99,12 @@ email:
   from:
     email: noreply@bitshala.org # Sender email address
     name: Bitshala # Sender name
+# MaxMind GeoLite2 City, used to prefill a user's country/state/city from their
+# IP. Free account + license key at https://www.maxmind.com/en/geolite2/signup.
+# Keys must stay present (even blank) for the env overrides GEOIP_ACCOUNT_ID /
+# GEOIP_LICENSE_KEY to apply. Blank = suggestions off. The database (~60 MB) is
+# downloaded to databaseDir on boot and refreshed weekly.
+geoip:
+  accountId:
+  licenseKey:
+  databaseDir: './data/geoip'

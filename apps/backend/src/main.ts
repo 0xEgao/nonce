@@ -26,6 +26,8 @@ async function bootstrap() {
 
     const configService = app.get<ConfigService>(ConfigService);
     const port = configService.get<number>('app.port') || 3000;
+    const trustProxy = configService.get<string>('app.trustProxy');
+    if (trustProxy) app.set('trust proxy', trustProxy);
     app.useGlobalPipes(new ValidationPipe({ transform: true }));
     app.enableCors({
         origin: '*',

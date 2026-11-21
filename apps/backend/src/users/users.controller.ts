@@ -6,10 +6,14 @@ import {
     ParseUUIDPipe,
     Patch,
     Query,
+    Req,
     UsePipes,
     ValidationPipe,
 } from '@nestjs/common';
 import { UsersService } from '@/users/users.service';
+import { GeoIpService } from '@/geoip/geoip.service';
+import type { Request } from 'express';
+import type { LocationSuggestion } from '@nonce/shared';
 import { GetUser } from '@/decorators/user.decorator';
 import { User } from '@/entities/user.entity';
 import {
@@ -37,7 +41,10 @@ import {
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-    constructor(private readonly usersService: UsersService) {}
+    constructor(
+        private readonly usersService: UsersService,
+        private readonly geoIpService: GeoIpService,
+    ) {}
 
     @Get()
     @ApiOperation({ summary: 'Search users (admin)' })
@@ -68,6 +75,15 @@ export class UsersController {
     @ApiOperation({ summary: 'Get current user profile' })
     getMe(@GetUser() user: User) {
         return this.usersService.getMe(user);
+    }
+
+    @Get('me/location-suggestion')
+    @ApiOperation({
+        summary:
+            "Guess the caller's country, Indian state and city from their IP, to prefill the location pickers",
+    })
+    getMyLocationSuggestion(@Req() req: Request): LocationSuggestion {
+        return this.geoIpService.lookup(req.ip);
     }
 
     @Get(':id/overview')
