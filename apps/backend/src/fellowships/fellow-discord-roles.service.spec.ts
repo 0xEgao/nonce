@@ -1,5 +1,4 @@
 import { ConfigService } from '@nestjs/config';
-import { AxiosError, AxiosHeaders } from 'axios';
 import { In, Repository } from 'typeorm';
 import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 import { Fellowship } from '@/entities/fellowship.entity';
@@ -43,28 +42,10 @@ const completed = (type: FellowshipType, discordUserId: string) =>
         user: { discordUserId },
     }) as Fellowship;
 
-// What DiscordClient throws for a 404: a ServiceError wrapping the AxiosError.
-const unknownMember = () =>
-    new ServiceError('{"message":"Unknown Member","code":10007}', {
-        cause: new AxiosError(
-            'Request failed with status code 404',
-            'ERR_BAD_REQUEST',
-            undefined,
-            undefined,
-            {
-                status: 404,
-                statusText: 'Not Found',
-                data: {},
-                headers: {},
-                config: { headers: new AxiosHeaders() },
-            },
-        ),
-    });
-
 describe('FellowDiscordRolesService.syncFellowRoles', () => {
     let fellowshipRepository: { find: jest.Mock };
     let discordClient: {
-        getGuildMember: jest.Mock;
+        findGuildMember: jest.Mock;
         attachRoleToMember: jest.Mock;
         removeRoleFromMember: jest.Mock;
     };
@@ -82,11 +63,11 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
         guild = {};
         fellowshipRepository = { find: jest.fn().mockResolvedValue([]) };
         discordClient = {
-            getGuildMember: jest.fn(
-                async (id: string): Promise<GuildMember> => {
-                    if (!guild[id]) throw unknownMember();
-                    return { user: { id, username: id }, roles: guild[id] };
-                },
+            findGuildMember: jest.fn(
+                async (id: string): Promise<GuildMember | null> =>
+                    guild[id]
+                        ? { user: { id, username: id }, roles: guild[id] }
+                        : null,
             ),
             attachRoleToMember: jest.fn().mockResolvedValue(undefined),
             removeRoleFromMember: jest.fn().mockResolvedValue(undefined),
@@ -189,7 +170,7 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
 
         await build().syncFellowRoles(NOW);
 
-        expect(discordClient.getGuildMember).not.toHaveBeenCalled();
+        expect(discordClient.findGuildMember).not.toHaveBeenCalled();
         expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
     });
 
@@ -244,7 +225,7 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
         expect(discordClient.attachRoleToMember.mock.calls).toEqual([
             ['design', DESIGN_ROLE],
         ]);
-        expect(discordClient.getGuildMember).toHaveBeenCalledTimes(1);
+        expect(discordClient.findGuildMember).toHaveBeenCalledTimes(1);
         expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
         expect(result.granted).toBe(1);
     });
@@ -253,7 +234,7 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
         const result = await build({}).syncFellowRoles(NOW);
 
         expect(fellowshipRepository.find).not.toHaveBeenCalled();
-        expect(discordClient.getGuildMember).not.toHaveBeenCalled();
+        expect(discordClient.findGuildMember).not.toHaveBeenCalled();
         expect(result).toEqual({
             granted: 0,
             removed: 0,
@@ -271,7 +252,7 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
 
         const result = await build().syncFellowRoles(NOW);
 
-        expect(discordClient.getGuildMember).toHaveBeenCalledTimes(2);
+        expect(discordClient.findGuildMember).toHaveBeenCalledTimes(2);
         expect(result).toEqual({
             granted: 0,
             removed: 0,
@@ -287,7 +268,7 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
             active(FellowshipType.DEVELOPER, 'ok'),
         ]);
         guild = { 'grant-fails': [], ok: [] };
-        discordClient.getGuildMember.mockImplementationOnce(async () => {
+        discordClient.findGuildMember.mockImplementationOnce(async () => {
             throw new ServiceError('rate limited');
         });
         discordClient.attachRoleToMember

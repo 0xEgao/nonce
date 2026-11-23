@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AxiosError } from 'axios';
 import { In, Repository } from 'typeorm';
 import { Fellowship } from '@/entities/fellowship.entity';
 import { FellowshipStatus, FellowshipType } from '@/common/enum';
 import { DiscordClient } from '@/discord-client/discord.client';
+import { GuildMember } from '@/discord-client/response';
 
 const FELLOW_ROLE_CONFIG_KEYS: Record<FellowshipType, string> = {
     [FellowshipType.DEVELOPER]: 'discord.roles.devFellow',
@@ -94,22 +94,23 @@ export class FellowDiscordRolesService {
         const plans = await this.planRoles(now);
 
         for (const [discordUserId, plan] of plans) {
-            let roles: string[];
+            let member: GuildMember | null;
             try {
-                roles = (await this.discordClient.getGuildMember(discordUserId))
-                    .roles;
+                member =
+                    await this.discordClient.findGuildMember(discordUserId);
             } catch (error) {
-                if (isUnknownMember(error)) {
-                    // An ex-fellow who left the guild has nothing to remove.
-                    if (plan.grant.size > 0) result.notInGuild++;
-                } else {
-                    result.failed++;
-                    this.logger.warn(
-                        `Failed to read Discord member ${discordUserId} for fellow role sync: ${error?.message}`,
-                    );
-                }
+                result.failed++;
+                this.logger.warn(
+                    `Failed to read Discord member ${discordUserId} for fellow role sync: ${error?.message}`,
+                );
                 continue;
             }
+            if (!member) {
+                // An ex-fellow who left the guild has nothing to remove.
+                if (plan.grant.size > 0) result.notInGuild++;
+                continue;
+            }
+            const { roles } = member;
 
             for (const roleId of plan.grant) {
                 if (roles.includes(roleId)) continue;
@@ -194,14 +195,4 @@ export class FellowDiscordRolesService {
             );
         }
     }
-}
-
-// Discord answers 404 (Unknown Member) for a user who is not in the guild.
-// DiscordClient wraps the AxiosError in a ServiceError, so look at the cause.
-function isUnknownMember(error: unknown): boolean {
-    const cause = error instanceof Error ? error.cause : undefined;
-    const axiosError = cause instanceof AxiosError ? cause : error;
-    return (
-        axiosError instanceof AxiosError && axiosError.response?.status === 404
-    );
 }
