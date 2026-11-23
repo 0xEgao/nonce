@@ -20,16 +20,16 @@ import { CohortMembership } from '@/entities/cohort-membership.entity';
 // Admin list endpoints search these columns with ILIKE '%term%' -- the first four
 // through the shared free-text search, `location` through the user pool's city
 // filter. A leading wildcard rules out B-tree, so in the database these are
-// pg_trgm GIN indexes -- see the follow-up migrations that swap them. TypeORM
-// cannot express an operator class, and since 1.x its schema diff compares the
-// access method, so it would turn them back into B-trees. `synchronize: false`
-// leaves them to the migrations; it only takes a name, so these are the names
-// the migrations gave them.
-@Index('IDX_065d4d8f3b5adb4a08841eae3c', { synchronize: false }) // name
-@Index('IDX_e12875dfb3b1d92d7d7c5377e2', { synchronize: false }) // email
-@Index('IDX_a09bffa83e18bd1fc46fc1c60f', { synchronize: false }) // discordUserName
-@Index('IDX_fef0dc4d49315c7f8052c5c129', { synchronize: false }) // discordGlobalName
-@Index('IDX_af7cabf8e064aa7bad09c731ba', { synchronize: false }) // location
+// pg_trgm GIN indexes -- see the follow-up migrations that swap them. Since 1.x
+// TypeORM's schema diff compares the access method, so `type: 'gin'` is what
+// stops it turning them back into B-trees. It cannot express the operator class
+// (gin_trgm_ops), though, so only the migrations can create these: a CREATE from
+// TypeORM itself (synchronize on an unmigrated database) would fail.
+@Index(['name'], { type: 'gin' })
+@Index(['email'], { type: 'gin' })
+@Index(['discordUserName'], { type: 'gin' })
+@Index(['discordGlobalName'], { type: 'gin' })
+@Index(['location'], { type: 'gin' })
 export class User extends BaseEntity {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
