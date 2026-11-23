@@ -299,6 +299,16 @@ export const useStartFellowshipContract = createUseMutation<
   },
 );
 
+export const useEndFellowship = createUseMutation<void, { id: string }>(
+  ({ id }) => fellowshipService.endFellowship(id),
+  {
+    queryInvalidation: async ({ queryClient, variables }) => {
+      await queryClient.invalidateQueries({ queryKey: ['fellowships', 'one', variables.id] });
+      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
+);
+
 // =========================
 // Fellowship Documents — Queries
 // =========================

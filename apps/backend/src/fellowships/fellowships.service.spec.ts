@@ -127,6 +127,124 @@ describe('FellowshipsService — startContract', () => {
     });
 });
 
+// Ending early must only move ACTIVE rows, must decide the status under the
+// row lock (not from the pre-lock read), and must never push endDate later.
+describe('FellowshipsService — endFellowshipEarly', () => {
+    let service: FellowshipsService;
+
+    const now = new Date('2026-11-23T10:00:00Z');
+
+    const fellowship = {
+        id: 'fellowship-1',
+        status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-06-01'),
+        endDate: new Date('2027-05-31'),
+        user: { id: 'user-1', displayName: 'Alice', location: 'Remote' },
+        application: { id: 'app-1', github: 'alice' },
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+    };
+
+    const manager = { findOne: jest.fn(), update: jest.fn() };
+    const dbTransactionService = { execute: jest.fn() };
+    const fellowshipRepository = { findOne: jest.fn() };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                FellowshipsService,
+                {
+                    provide: getRepositoryToken(Fellowship),
+                    useValue: fellowshipRepository,
+                },
+                {
+                    provide: getRepositoryToken(APITask),
+                    useValue: { save: jest.fn() },
+                },
+                {
+                    provide: DbTransactionService,
+                    useValue: dbTransactionService,
+                },
+            ],
+        }).compile();
+
+        service = module.get(FellowshipsService);
+
+        dbTransactionService.execute.mockImplementation(
+            (fn: (m: EntityManager) => Promise<unknown>) =>
+                fn(manager as unknown as EntityManager),
+        );
+        fellowshipRepository.findOne.mockResolvedValue({ ...fellowship });
+        manager.findOne.mockResolvedValue({ ...fellowship });
+    });
+
+    afterEach(() => jest.resetAllMocks());
+
+    it('moves an ACTIVE fellowship to COMPLETED with endDate = now', async () => {
+        const result = await service.endFellowshipEarly('fellowship-1', now);
+
+        expect(manager.findOne).toHaveBeenCalledWith(
+            Fellowship,
+            expect.objectContaining({
+                lock: { mode: 'pessimistic_write' },
+            }),
+        );
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            { endDate: now, status: FellowshipStatus.COMPLETED },
+        );
+        expect(result.status).toBe(FellowshipStatus.COMPLETED);
+        expect(result.endDate).toBe(now.toISOString());
+    });
+
+    it('keeps an endDate that has already passed instead of moving it later', async () => {
+        const passed = new Date('2026-11-20T00:00:00Z');
+        manager.findOne.mockResolvedValue({ ...fellowship, endDate: passed });
+
+        await service.endFellowshipEarly('fellowship-1', now);
+
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            { endDate: passed, status: FellowshipStatus.COMPLETED },
+        );
+    });
+
+    it('rejects a fellowship that became COMPLETED before the lock was taken', async () => {
+        manager.findOne.mockResolvedValue({
+            ...fellowship,
+            status: FellowshipStatus.COMPLETED,
+        });
+
+        await expect(
+            service.endFellowshipEarly('fellowship-1', now),
+        ).rejects.toThrow('Fellowship has already ended');
+        expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects a fellowship whose contract has not started', async () => {
+        manager.findOne.mockResolvedValue({
+            ...fellowship,
+            status: FellowshipStatus.DOCUMENTS_APPROVED,
+        });
+
+        await expect(
+            service.endFellowshipEarly('fellowship-1', now),
+        ).rejects.toThrow(BadRequestException);
+        expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it('404s an unknown fellowship', async () => {
+        fellowshipRepository.findOne.mockResolvedValue(null);
+
+        await expect(
+            service.endFellowshipEarly('missing', now),
+        ).rejects.toThrow('Fellowship not found');
+        expect(dbTransactionService.execute).not.toHaveBeenCalled();
+    });
+});
+
 describe('FellowshipsService — listPublicFellows', () => {
     let service: FellowshipsService;
 

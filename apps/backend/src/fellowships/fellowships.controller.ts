@@ -70,6 +70,19 @@ export class FellowshipsController {
         return this.service.startContract(id, body);
     }
 
+    @Patch(':id/end')
+    @ApiOperation({
+        summary: 'End an active fellowship early (admin)',
+        description:
+            'Moves an ACTIVE fellowship to COMPLETED with endDate set to now.',
+    })
+    @Roles(UserRole.ADMIN)
+    async endFellowshipEarly(
+        @Param('id', new ParseUUIDPipe()) id: string,
+    ): Promise<FellowshipResponseDto> {
+        return this.service.endFellowshipEarly(id);
+    }
+
     @Get(':id/documents')
     @ApiOperation({ summary: 'List a fellowship’s documents (fellow/admin)' })
     async listDocuments(

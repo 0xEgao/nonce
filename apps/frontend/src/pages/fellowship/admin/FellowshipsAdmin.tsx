@@ -20,11 +20,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  CircleStop,
   Download,
   PlayCircle,
   Search,
 } from 'lucide-react';
 import DocumentList from '../../../components/fellowship/DocumentList';
+import EndFellowshipDialog from '../../../components/fellowship/EndFellowshipDialog';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StartContractDialog from '../../../components/fellowship/StartContractDialog';
@@ -167,6 +169,8 @@ const FellowshipsAdmin = () => {
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose "End fellowship" confirmation is open (ACTIVE only, admin-only).
+  const [endingFellowship, setEndingFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose document-review dialog is open (download + approve/reject).
   const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
@@ -441,8 +445,32 @@ const FellowshipsAdmin = () => {
             >
               Start contract
             </Button>
+          ) : proposalFellowship?.status === FellowshipStatus.ACTIVE ? (
+            // Ending early is only offered on running contracts, the one state
+            // the backend accepts, and sits behind a confirmation dialog.
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<CircleStop size={15} />}
+              onClick={() => {
+                setEndingFellowship(proposalFellowship);
+                setProposalFellowship(null);
+              }}
+            >
+              End fellowship
+            </Button>
           ) : null
         }
+      />
+
+      <EndFellowshipDialog
+        fellowship={endingFellowship}
+        onClose={() => setEndingFellowship(null)}
+        onSuccess={(msg) => {
+          setToast({ kind: 'success', msg });
+          setEndingFellowship(null);
+        }}
+        onError={(msg) => setToast({ kind: 'error', msg })}
       />
 
       <StartContractDialog

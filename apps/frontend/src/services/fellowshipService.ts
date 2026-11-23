@@ -399,6 +399,14 @@ class FellowshipService {
     });
   };
 
+  public endFellowship = async (id: string): Promise<void> => {
+    await this.request<void>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowships/${id}/end`,
+    });
+  };
+
   // =========================
   // Fellowship Documents
   // =========================
