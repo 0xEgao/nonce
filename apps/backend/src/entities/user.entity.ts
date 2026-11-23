@@ -21,14 +21,15 @@ import { CohortMembership } from '@/entities/cohort-membership.entity';
 // through the shared free-text search, `location` through the user pool's city
 // filter. A leading wildcard rules out B-tree, so in the database these are
 // pg_trgm GIN indexes -- see the follow-up migrations that swap them. TypeORM
-// cannot express an operator class, so they are declared plain here; its schema
-// diff compares name, columns and uniqueness but never the access method, so the
-// swap sticks.
-@Index(['name'])
-@Index(['email'])
-@Index(['discordUserName'])
-@Index(['discordGlobalName'])
-@Index(['location'])
+// cannot express an operator class, and since 1.x its schema diff compares the
+// access method, so it would turn them back into B-trees. `synchronize: false`
+// leaves them to the migrations; it only takes a name, so these are the names
+// the migrations gave them.
+@Index('IDX_065d4d8f3b5adb4a08841eae3c', { synchronize: false }) // name
+@Index('IDX_e12875dfb3b1d92d7d7c5377e2', { synchronize: false }) // email
+@Index('IDX_a09bffa83e18bd1fc46fc1c60f', { synchronize: false }) // discordUserName
+@Index('IDX_fef0dc4d49315c7f8052c5c129', { synchronize: false }) // discordGlobalName
+@Index('IDX_af7cabf8e064aa7bad09c731ba', { synchronize: false }) // location
 export class User extends BaseEntity {
     @PrimaryGeneratedColumn('uuid')
     id!: string;

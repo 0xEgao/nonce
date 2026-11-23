@@ -1303,7 +1303,7 @@ export class CohortsService {
         }
 
         const alreadyOnWaitlist: boolean =
-            await this.cohortWaitlistRepository.exist({
+            await this.cohortWaitlistRepository.exists({
                 where: { user: { id: user.id }, type: body.type },
             });
 

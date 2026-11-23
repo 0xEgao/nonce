@@ -139,7 +139,7 @@ describe('RunsService — completing a run', () => {
             ) => applyUpdate(runRow, criteria, partial),
         ),
     };
-    const ciRunLogRepository = { exist: jest.fn(async () => true) };
+    const ciRunLogRepository = { exists: jest.fn(async () => true) };
     const gitHubAppClient = {
         listRunJobs: jest.fn(async () => []),
         // A run that graded leaves a report; by default, a passing one.
@@ -877,7 +877,7 @@ describe('RunsService — the GitHub link on a run', () => {
     const viewRun = async (role: UserRole) => {
         const service = await compileRunsService({
             ciRunRepository: { findOne: jest.fn(async () => finished) },
-            ciRunLogRepository: { exist: jest.fn(async () => false) },
+            ciRunLogRepository: { exists: jest.fn(async () => false) },
             assignmentsService: {
                 resolveSubmissionForViewer: jest.fn(async () => ({})),
             },
