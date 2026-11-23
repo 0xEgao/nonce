@@ -227,7 +227,7 @@ export class RunsService {
             run = await this.loadRunForViewer(runId, user);
         }
 
-        const hasLogs = await this.ciRunLogRepository.exist({
+        const hasLogs = await this.ciRunLogRepository.exists({
             where: { ciRun: { id: run.id } },
         });
         return this.toDetail(run, user, hasLogs);
@@ -633,7 +633,7 @@ export class RunsService {
     /** Stores the grading job's output once, when the run finishes. */
     private async captureLogs(run: CIRun): Promise<void> {
         try {
-            const existing = await this.ciRunLogRepository.exist({
+            const existing = await this.ciRunLogRepository.exists({
                 where: { ciRun: { id: run.id } },
             });
             if (existing) return;

@@ -20,7 +20,7 @@ to see its full history.
 
 ## Prerequisites
 
-- Node.js >= 20.12 and npm
+- Node.js 22.22.3+ or 24.15+ (the `engines` range in `package.json`) and npm
 - Docker (for Postgres, Redis, and Mailcrab)
 
 ## Setup

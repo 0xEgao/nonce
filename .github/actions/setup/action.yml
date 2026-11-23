@@ -12,7 +12,8 @@ runs:
   steps:
     - uses: actions/setup-node@v4
       with:
-        node-version: 20.12.x
+        # The production image's line (apps/backend/Dockerfile: node:22-alpine).
+        node-version: 22.x
         cache: npm
 
     - name: Install dependencies
