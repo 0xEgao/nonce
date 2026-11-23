@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
-import { EntityManager, IsNull, LessThan, Not } from 'typeorm';
+import { EntityManager, LessThan } from 'typeorm';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { FellowshipResponseDto } from '@/fellowships/fellowships.response.dto';
 import { Fellowship } from '@/entities/fellowship.entity';
@@ -193,17 +193,13 @@ describe('FellowshipsService — listPublicFellows', () => {
 
     afterEach(() => jest.resetAllMocks());
 
-    it('queries ACTIVE fellowships that have contract dates, with user/application relations and pagination', async () => {
+    it('queries ACTIVE fellowships with user/application relations and pagination', async () => {
         fellowshipRepository.findAndCount.mockResolvedValue([[], 0]);
 
         await service.listPublicFellows({ page: 2, pageSize: 20 });
 
         expect(fellowshipRepository.findAndCount).toHaveBeenCalledWith({
-            where: {
-                status: FellowshipStatus.ACTIVE,
-                startDate: Not(IsNull()),
-                endDate: Not(IsNull()),
-            },
+            where: { status: FellowshipStatus.ACTIVE },
             relations: { user: true, application: true },
             order: { createdAt: 'DESC', id: 'ASC' },
             skip: 40,

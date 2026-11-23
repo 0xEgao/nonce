@@ -180,7 +180,9 @@ export class PublicFellowResponseDto {
     static fromEntity(fellowship: Fellowship): PublicFellowResponseDto {
         const application = fellowship.application;
         const githubUsername = publicGithubUsername(fellowship);
-        // listPublicFellows only selects fellowships with both dates set.
+        // The public contract promises both dates. Only ACTIVE fellowships are
+        // listed, and startContract -- the only path to ACTIVE -- sets both, so
+        // a missing date means the row was edited by hand: fail loudly.
         if (!fellowship.startDate || !fellowship.endDate) {
             throw new Error(
                 `Fellowship ${fellowship.id} has no contract dates and cannot be listed publicly`,
