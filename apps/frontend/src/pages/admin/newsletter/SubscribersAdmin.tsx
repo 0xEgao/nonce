@@ -25,14 +25,14 @@ import { MoreVertical, Search } from 'lucide-react';
 import { SubscriberStatus, type SubscriberResponse } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import ConfirmDialog from '../../../components/newsletter/ConfirmDialog';
-import FilterPills from '../../../components/newsletter/FilterPills';
-import NewsletterAdminTabs from '../../../components/newsletter/NewsletterAdminTabs';
-import { SubscriberStatusChip } from '../../../components/newsletter/StatusChips';
-import TablePager from '../../../components/newsletter/TablePager';
-import ToastSnackbar from '../../../components/newsletter/ToastSnackbar';
-import { usePaging } from '../../../components/newsletter/usePaging';
-import { useToast } from '../../../components/newsletter/useToast';
+import ConfirmDialog from '../../../components/newsletter/shared/ConfirmDialog';
+import FilterPills from '../../../components/newsletter/shared/FilterPills';
+import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
+import { SubscriberStatusChip } from '../../../components/newsletter/shared/StatusChips';
+import TablePager from '../../../components/newsletter/shared/TablePager';
+import ToastSnackbar from '../../../components/newsletter/shared/ToastSnackbar';
+import { usePaging } from '../../../components/newsletter/shared/usePaging';
+import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
 import {
   useDeleteSubscriber,

@@ -25,7 +25,7 @@ import {
   type LocationParts,
 } from '@nonce/shared';
 import LocationFields from '../location/LocationFields';
-import EmailPreferencesSection from '../newsletter/EmailPreferencesSection';
+import EmailPreferencesSection from '../newsletter/public/EmailPreferencesSection';
 import {
   locationProblemErrors,
   locationProblemField,

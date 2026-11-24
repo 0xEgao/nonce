@@ -52,8 +52,8 @@ import { formatDateTime } from '../../../utils/dateUtils';
 import AudiencePicker from './AudiencePicker';
 import ConfirmDialog from './ConfirmDialog';
 import EmailPreview from './EmailPreview';
-import NewsletterStatusChip from './NewsletterStatusChip';
-import RichTextEditor from './RichTextEditor';
+import NewsletterStatusChip from '../shared/NewsletterStatusChip';
+import RichTextEditor from '../editor/RichTextEditor';
 import SendDialog from './SendDialog';
 import SendTestDialog from './SendTestDialog';
 import {
@@ -70,7 +70,7 @@ import {
 } from './newsletterUtils';
 import { type SaveState, useNewsletterAutosave } from './useNewsletterAutosave';
 
-const HtmlEditor = lazy(() => import('./HtmlEditor'));
+const HtmlEditor = lazy(() => import('../editor/HtmlEditor'));
 
 const PREVIEW_DELAY_MS = 600;
 

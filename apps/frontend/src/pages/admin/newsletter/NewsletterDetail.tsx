@@ -9,10 +9,10 @@ import {
 import { ArrowLeft } from 'lucide-react';
 import { type NewsletterDetailResponse, NewsletterStatus } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import NewsletterAdminTabs from '../../../components/newsletter/NewsletterAdminTabs';
+import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
 import NewsletterComposer from '../../../components/newsletter/composer/NewsletterComposer';
-import NewsletterReport from '../../../components/newsletter/composer/NewsletterReport';
-import NewsletterScheduledView from '../../../components/newsletter/composer/NewsletterScheduledView';
+import NewsletterReport from '../../../components/newsletter/report/NewsletterReport';
+import NewsletterScheduledView from '../../../components/newsletter/report/NewsletterScheduledView';
 import { useNewsletter } from '../../../hooks/newsletterHooks';
 import {
   apiErrorMessage,

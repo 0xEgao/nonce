@@ -36,27 +36,27 @@ import {
 } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import AddPortalUsersDialog from '../../../components/newsletter/AddPortalUsersDialog';
-import AddSubscribersDialog from '../../../components/newsletter/AddSubscribersDialog';
-import ConfirmDialog from '../../../components/newsletter/ConfirmDialog';
-import EmbedDialog from '../../../components/newsletter/EmbedDialog';
-import FilterPills from '../../../components/newsletter/FilterPills';
-import MailingListFormDialog from '../../../components/newsletter/MailingListFormDialog';
-import NewsletterAdminTabs from '../../../components/newsletter/NewsletterAdminTabs';
+import AddPortalUsersDialog from '../../../components/newsletter/lists/AddPortalUsersDialog';
+import AddSubscribersDialog from '../../../components/newsletter/lists/AddSubscribersDialog';
+import ConfirmDialog from '../../../components/newsletter/shared/ConfirmDialog';
+import EmbedDialog from '../../../components/newsletter/lists/EmbedDialog';
+import FilterPills from '../../../components/newsletter/shared/FilterPills';
+import MailingListFormDialog from '../../../components/newsletter/lists/MailingListFormDialog';
+import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
 import {
   ArchivedChip,
   ListVisibilityChip,
   SubscriberStatusChip,
   SubscriptionStatusChip,
-} from '../../../components/newsletter/StatusChips';
-import TablePager from '../../../components/newsletter/TablePager';
-import ToastSnackbar from '../../../components/newsletter/ToastSnackbar';
+} from '../../../components/newsletter/shared/StatusChips';
+import TablePager from '../../../components/newsletter/shared/TablePager';
+import ToastSnackbar from '../../../components/newsletter/shared/ToastSnackbar';
 import {
   SUBSCRIPTION_SOURCE_LABELS,
   downloadBlob,
-} from '../../../components/newsletter/newsletterUtils';
-import { usePaging } from '../../../components/newsletter/usePaging';
-import { useToast } from '../../../components/newsletter/useToast';
+} from '../../../components/newsletter/shared/newsletterUtils';
+import { usePaging } from '../../../components/newsletter/shared/usePaging';
+import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
 import {
   useExportMailingListSubscribers,

@@ -15,7 +15,7 @@ import type { PublicMailingListResponse } from '@nonce/shared';
 import {
   PublicShell,
   StatePanel,
-} from '../../components/newsletter/PublicShell';
+} from '../../components/newsletter/public/PublicShell';
 import {
   usePublicMailingLists,
   useSubscribe,

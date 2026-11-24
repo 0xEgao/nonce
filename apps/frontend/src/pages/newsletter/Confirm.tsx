@@ -5,8 +5,8 @@ import {
   AccentLink,
   PublicShell,
   StatePanel,
-} from '../../components/newsletter/PublicShell';
-import { PREVIEW_TOKEN } from '../../components/newsletter/newsletterUtils';
+} from '../../components/newsletter/public/PublicShell';
+import { PREVIEW_TOKEN } from '../../components/newsletter/shared/newsletterUtils';
 import { useConfirmSubscription } from '../../hooks/newsletterHooks';
 import { usePageMeta } from '../../hooks/usePageMeta';
 import {

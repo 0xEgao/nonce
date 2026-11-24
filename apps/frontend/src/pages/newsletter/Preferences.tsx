@@ -2,9 +2,9 @@ import { useSearchParams } from 'react-router-dom';
 import {
   PublicShell,
   StatePanel,
-} from '../../components/newsletter/PublicShell';
-import EmailPreferences from '../../components/newsletter/EmailPreferences';
-import { PREVIEW_TOKEN } from '../../components/newsletter/newsletterUtils';
+} from '../../components/newsletter/public/PublicShell';
+import EmailPreferences from '../../components/newsletter/public/EmailPreferences';
+import { PREVIEW_TOKEN } from '../../components/newsletter/shared/newsletterUtils';
 import { usePageMeta } from '../../hooks/usePageMeta';
 
 const Preferences = () => {

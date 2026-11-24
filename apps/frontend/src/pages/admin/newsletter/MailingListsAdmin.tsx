@@ -29,16 +29,16 @@ import {
 import type { MailingListResponse } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import ConfirmDialog from '../../../components/newsletter/ConfirmDialog';
-import EmbedDialog from '../../../components/newsletter/EmbedDialog';
-import MailingListFormDialog from '../../../components/newsletter/MailingListFormDialog';
-import NewsletterAdminTabs from '../../../components/newsletter/NewsletterAdminTabs';
+import ConfirmDialog from '../../../components/newsletter/shared/ConfirmDialog';
+import EmbedDialog from '../../../components/newsletter/lists/EmbedDialog';
+import MailingListFormDialog from '../../../components/newsletter/lists/MailingListFormDialog';
+import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
 import {
   ArchivedChip,
   ListVisibilityChip,
-} from '../../../components/newsletter/StatusChips';
-import ToastSnackbar from '../../../components/newsletter/ToastSnackbar';
-import { useToast } from '../../../components/newsletter/useToast';
+} from '../../../components/newsletter/shared/StatusChips';
+import ToastSnackbar from '../../../components/newsletter/shared/ToastSnackbar';
+import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
 import {
   useDeleteMailingList,

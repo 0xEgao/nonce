@@ -34,10 +34,10 @@ import {
 } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
-import NewsletterAdminTabs from '../../../components/newsletter/NewsletterAdminTabs';
+import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
 import ConfirmDialog from '../../../components/newsletter/composer/ConfirmDialog';
 import FilterPill from '../../../components/newsletter/composer/FilterPill';
-import NewsletterStatusChip from '../../../components/newsletter/composer/NewsletterStatusChip';
+import NewsletterStatusChip from '../../../components/newsletter/shared/NewsletterStatusChip';
 import PaginationFooter from '../../../components/newsletter/composer/PaginationFooter';
 import {
   apiErrorMessage,

@@ -16,7 +16,7 @@ import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { AssignmentProvisioningService } from '@/assignments/assignment-provisioning.service';
 import { RunsService } from '@/assignments/runs.service';
 import { AdminAssignmentsService } from '@/assignments/admin-assignments.service';
-import { NewsletterSendService } from '@/newsletter/newsletter-send.service';
+import { NewsletterSendService } from '@/newsletter/sending/newsletter-send.service';
 
 @Injectable()
 export class APITaskProcessorService {
