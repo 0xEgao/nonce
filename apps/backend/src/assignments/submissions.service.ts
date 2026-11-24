@@ -104,9 +104,24 @@ export class SubmissionsService {
         );
         const tree = await this.readTreeCached(owner, repo, commit.treeSha);
 
+        // The cap must only ever cost the student locked files. GitHub lists a
+        // tree in path order, so a large protected corpus (bpd-week-3 ships
+        // 8,132 mempool files) would otherwise push everything sorted after it
+        // — run.sh, whole language folders — past the cap, and the editor has
+        // no other way to reach a file it does not list. Editable entries go
+        // first; the file tree sorts what it shows, so order is not visible.
+        // Each path is matched once up front (matching builds a RegExp per
+        // pattern) rather than inside the comparator, and Array#sort is stable,
+        // so GitHub's order is kept within each group.
+        const { protectedPaths } = submission.assignment;
         const entries = tree.entries
-            .slice(0, MAX_TREE_ENTRIES)
             .map((entry) => ({
+                entry,
+                locked: isProtectedPath(entry.path, protectedPaths),
+            }))
+            .sort((a, b) => Number(a.locked) - Number(b.locked))
+            .slice(0, MAX_TREE_ENTRIES)
+            .map(({ entry }) => ({
                 path: entry.path,
                 type: entry.type,
                 sha: entry.sha,
