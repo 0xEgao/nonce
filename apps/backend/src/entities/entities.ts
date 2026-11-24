@@ -17,6 +17,12 @@ import { Fellowship } from '@/entities/fellowship.entity';
 import { FellowshipDocument } from '@/entities/fellowship-document.entity';
 import { FellowshipReport } from '@/entities/fellowship-report.entity';
 import { FellowshipReportNote } from '@/entities/fellowship-report-note.entity';
+import { MailingList } from '@/entities/mailing-list.entity';
+import { MailingListSubscription } from '@/entities/mailing-list-subscription.entity';
+import { Newsletter } from '@/entities/newsletter.entity';
+import { NewsletterDelivery } from '@/entities/newsletter-delivery.entity';
+import { NewsletterImage } from '@/entities/newsletter-image.entity';
+import { Subscriber } from '@/entities/subscriber.entity';
 
 export const entities = [
     APITask,
@@ -37,5 +43,11 @@ export const entities = [
     FellowshipReport,
     FellowshipReportNote,
     GroupDiscussionScore,
+    MailingList,
+    MailingListSubscription,
+    Newsletter,
+    NewsletterDelivery,
+    NewsletterImage,
+    Subscriber,
     User,
 ];

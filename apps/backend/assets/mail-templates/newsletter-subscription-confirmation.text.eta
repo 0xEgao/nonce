@@ -1,0 +1,11 @@
+Confirm Your Subscription — Bitshala Newsletters
+
+Hi there,
+
+Someone, hopefully you, asked to receive <%~ it.listNames %> from Bitshala at this address. Confirm below and we'll start sending them your way.
+
+Confirm your subscription: <%~ it.confirmUrl %>
+
+---
+
+Didn't ask for this? Just ignore this email and you won't be subscribed to anything.
