@@ -110,15 +110,18 @@ export class SubmissionsService {
         // — run.sh, whole language folders — past the cap, and the editor has
         // no other way to reach a file it does not list. Editable entries go
         // first; the file tree sorts what it shows, so order is not visible.
+        // Each path is matched once up front (matching builds a RegExp per
+        // pattern) rather than inside the comparator, and Array#sort is stable,
+        // so GitHub's order is kept within each group.
         const { protectedPaths } = submission.assignment;
-        const isLocked = (path: string) =>
-            isProtectedPath(path, protectedPaths);
-        const entries = [
-            ...tree.entries.filter((entry) => !isLocked(entry.path)),
-            ...tree.entries.filter((entry) => isLocked(entry.path)),
-        ]
-            .slice(0, MAX_TREE_ENTRIES)
+        const entries = tree.entries
             .map((entry) => ({
+                entry,
+                locked: isProtectedPath(entry.path, protectedPaths),
+            }))
+            .sort((a, b) => Number(a.locked) - Number(b.locked))
+            .slice(0, MAX_TREE_ENTRIES)
+            .map(({ entry }) => ({
                 path: entry.path,
                 type: entry.type,
                 sha: entry.sha,
