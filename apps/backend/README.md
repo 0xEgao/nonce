@@ -7,7 +7,7 @@ This is a NestJS-based backend application for the Bitshala platform.
 ## Prerequisites
 
 - [Docker](https://www.docker.com/)
-- [Node.js](https://nodejs.org/) (v20 or higher)
+- [Node.js](https://nodejs.org/) (22.22.3+ or 24.15+)
 - [npm](https://www.npmjs.com/)
 
 ## Running the Application

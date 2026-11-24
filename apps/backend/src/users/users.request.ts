@@ -1,4 +1,9 @@
 import {
+    IsCompleteLocation,
+    sendsLocation,
+} from '@/validators/is-complete-location';
+import { CITY_MAX_LENGTH } from '@nonce/shared';
+import {
     IsArray,
     IsDateString,
     IsInt,
@@ -12,6 +17,7 @@ import {
     IsUUID,
     IsEnum,
     IsEmail,
+    ValidateIf,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { PaginatedQueryDto } from '@/common/dto';
@@ -97,11 +103,29 @@ export class UpdateUserRequest {
     @Max(168)
     weeklyCohortCommitmentHours?: number;
 
-    /** Free-form location (e.g., "Bengaluru, IN") */
+    // Location, sent as a unit: once any part is sent, the three must together
+    // pass the shared rule (#45). The server composes `location` ("Pune,
+    // Maharashtra, India") from them; it is not writable directly.
+
+    /** ISO 3166-1 alpha-2 country code, e.g. "IN". */
+    // Not @IsOptional: that would skip the check when only state or city is
+    // sent, or when country is null. A known country also implies the type
+    // and length.
+    @ValidateIf(sendsLocation)
+    @IsCompleteLocation()
+    country?: string | null;
+
+    /** Indian state name, e.g. "Maharashtra". Ignored outside India. */
     @IsOptional()
     @IsString()
-    @MaxLength(255)
-    location?: string;
+    @MaxLength(100)
+    state?: string | null;
+
+    /** City. Required in India, optional elsewhere. */
+    @IsOptional()
+    @IsString()
+    @MaxLength(CITY_MAX_LENGTH)
+    city?: string | null;
 
     @IsOptional()
     @IsString()

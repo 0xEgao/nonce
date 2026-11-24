@@ -145,7 +145,11 @@ export interface UpdateUserRequest {
   bitcoinBooksRead?: string[];
   whyBitcoin?: string;
   weeklyCohortCommitmentHours?: number;
-  location?: string;
+  // The location parts are validated as a unit: send all three together.
+  // `location` is composed from them server-side.
+  country?: string | null;
+  state?: string | null;
+  city?: string | null;
   referral?: string;
 }
 
@@ -172,7 +176,14 @@ export interface GetUserResponse {
   bitcoinBooksRead: string[] | null;
   whyBitcoin: string | null;
   weeklyCohortCommitmentHours: number | null;
+  // Display string composed from country/state/city ("Pune, Maharashtra,
+  // India"), or an old free-text value for a user who hasn't picked one yet.
   location: string | null;
+  // ISO 3166-1 alpha-2 code.
+  country: string | null;
+  // Indian state name; null outside India.
+  state: string | null;
+  city: string | null;
   referral: string | null;
 }
 

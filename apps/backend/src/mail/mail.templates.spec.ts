@@ -24,7 +24,7 @@ describe('mail templates — dark scheme declaration', () => {
         expect(html).toContain('color-scheme: dark');
 
         const tagsMissingBgcolor = (
-            html.match(/<(?:body|table|td|th)\b[^>]*>/g) ?? []
+            html.match(/<(?:body|table|td|th)\b[^>]*>/g) ?? ([] as string[])
         ).filter(
             (tag) =>
                 tag.includes('background-color:') && !tag.includes('bgcolor='),

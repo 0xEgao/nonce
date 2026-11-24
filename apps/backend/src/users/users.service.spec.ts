@@ -432,3 +432,76 @@ describe('UsersService.searchUsers — location filter', () => {
         expect(locationClause()?.params).toEqual({ location: '%pune%' });
     });
 });
+
+// The location parts arrive validated as a unit (see is-complete-location);
+// updateMe stores them normalized and keeps `location` composed from them.
+describe('UsersService.updateMe — location', () => {
+    let service: UsersService;
+    const userRepository = { save: jest.fn() };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                UsersService,
+                {
+                    provide: getRepositoryToken(User),
+                    useValue: userRepository,
+                },
+                {
+                    provide: ConfigService,
+                    useValue: { getOrThrow: jest.fn(() => 'role-id') },
+                },
+                { provide: ScoresService, useValue: {} },
+                { provide: CertificatesService, useValue: {} },
+                { provide: FellowshipsService, useValue: {} },
+            ],
+        }).compile();
+        service = module.get<UsersService>(UsersService);
+    });
+
+    const oldUser = () =>
+        ({
+            location: 'Pune, India',
+            country: null,
+            state: null,
+            city: null,
+        }) as unknown as User;
+
+    it('stores the parts and the composed display string', async () => {
+        const user = oldUser();
+        const response = await service.updateMe(user, {
+            country: 'IN',
+            state: 'Maharashtra',
+            city: ' Pune ',
+        });
+        expect(user).toMatchObject({
+            country: 'IN',
+            state: 'Maharashtra',
+            city: 'Pune',
+            location: 'Pune, Maharashtra, India',
+        });
+        expect(response).toMatchObject({
+            country: 'IN',
+            state: 'Maharashtra',
+            city: 'Pune',
+            location: 'Pune, Maharashtra, India',
+        });
+    });
+
+    it('drops the state outside India', async () => {
+        const user = oldUser();
+        await service.updateMe(user, { country: 'KE', state: 'Nairobi' });
+        expect(user).toMatchObject({
+            country: 'KE',
+            state: null,
+            city: null,
+            location: 'Kenya',
+        });
+    });
+
+    it('leaves the location alone when no part is sent', async () => {
+        const user = oldUser();
+        await service.updateMe(user, { name: 'Alice' });
+        expect(user).toMatchObject({ location: 'Pune, India', country: null });
+    });
+});

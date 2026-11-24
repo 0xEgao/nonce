@@ -37,6 +37,7 @@ import {
     TAG_LIMIT,
     TITLE_LIMIT,
 } from '@/fellowship-applications/proposal-validation';
+import { CITY_MAX_LENGTH } from '@nonce/shared';
 
 const trim = ({ value }: { value: unknown }): unknown =>
     typeof value === 'string' ? value.trim() : value;
@@ -228,18 +229,34 @@ export class ProposalFieldsDto {
     @MaxLength(LONG_TEXT_LIMIT)
     scopeOfWork?: string;
 
-    // Profile field: written through to the applicant's user profile rather
-    // than stored on the application (see service), so it is never duplicated.
-    // Limit mirrors UpdateUserRequest.location. Required at submit on all tracks.
+    // Profile location, written through to the applicant's user profile
+    // (country/state/city, plus the composed `location`) rather than stored on
+    // the application, so it is never duplicated. Prefixed because `city` above
+    // is the Educator meetup city. Drafts accept incomplete parts: the form
+    // prefills these and autosaves every step, so judging them here would block
+    // saving. The rule (#45) is enforced where the applicant can act on it: the
+    // "About you" step in the form, and submit() on the server.
     @IsOptional()
     @Transform(trim)
     @IsString()
-    @MaxLength(255)
-    location?: string;
+    @MaxLength(2)
+    locationCountry?: string | null;
+
+    @IsOptional()
+    @Transform(trim)
+    @IsString()
+    @MaxLength(100)
+    locationState?: string | null;
+
+    @IsOptional()
+    @Transform(trim)
+    @IsString()
+    @MaxLength(CITY_MAX_LENGTH)
+    locationCity?: string | null;
 
     // Profile field: the applicant's name used on the certificate. Written
     // through to `user.name` rather than stored on the application (see
-    // service), so it is never duplicated. Mirrors `location`.
+    // service), so it is never duplicated.
     @IsOptional()
     @Transform(trim)
     @IsString()

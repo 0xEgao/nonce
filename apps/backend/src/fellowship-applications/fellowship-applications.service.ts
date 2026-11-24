@@ -1,3 +1,5 @@
+import { LOCATION_PROBLEM_MESSAGES, locationProblem } from '@nonce/shared';
+import { locationColumns } from '@/common/location';
 import {
     BadRequestException,
     ForbiddenException,
@@ -96,9 +98,29 @@ export class FellowshipApplicationsService {
             | UpdateFellowshipApplicationRequestDto,
     ): Promise<void> {
         let changed = false;
-        if (dto.location !== undefined) {
-            user.location = emptyToNull(dto.location);
-            changed = true;
+        if (
+            dto.locationCountry !== undefined ||
+            dto.locationState !== undefined ||
+            dto.locationCity !== undefined
+        ) {
+            // Sent as a unit, like PATCH /users/me, but not judged: a draft may
+            // hold an incomplete location (see the DTO). The form echoes the
+            // profile's parts on every autosave, so only write when they
+            // changed: rewriting would replace an old free-text `location`
+            // the user hasn't re-picked yet with the composed string.
+            const columns = locationColumns({
+                country: dto.locationCountry,
+                state: dto.locationState,
+                city: dto.locationCity,
+            });
+            if (
+                columns.country !== user.country ||
+                columns.state !== user.state ||
+                columns.city !== user.city
+            ) {
+                Object.assign(user, columns);
+                changed = true;
+            }
         }
         if (dto.name !== undefined) {
             user.name = emptyToNull(dto.name);
@@ -446,12 +468,14 @@ export class FellowshipApplicationsService {
         }
 
         // Location lives on the applicant's profile rather than the
-        // application, but is still required to submit.
-        if (
-            !application.applicant?.location ||
-            !application.applicant.location.trim()
-        ) {
+        // application, and must be complete to submit: a country, and in India
+        // a state and city. Profiles saved before the structured fields (#45)
+        // may only hold free text, which counts as missing.
+        const locationIssue = locationProblem(application.applicant);
+        if (locationIssue === 'noCountry') {
             errors.push('Location is required');
+        } else if (locationIssue) {
+            errors.push(LOCATION_PROBLEM_MESSAGES[locationIssue]);
         }
 
         if (application.graduationYear == null) {

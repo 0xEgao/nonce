@@ -31,6 +31,7 @@ import type {
   GetFeedbackResponseDto,
   UpdateFeedbackRequestDto,
 } from '../types/api.ts';
+import type { LocationSuggestion } from '@nonce/shared';
 import type {
   ListUsersQueryDto,
   UserSearchResultDto,
@@ -97,6 +98,17 @@ class ApiService {
       method: 'PATCH',
       url: '/users/me',
       data: body,
+    });
+    return data;
+  };
+
+  // Best guess at the caller's location from the request IP, used to prefill
+  // the location fields. Any part may be null.
+  public getLocationSuggestion = async (): Promise<LocationSuggestion> => {
+    const { data } = await this.request<LocationSuggestion>({
+      headers: this.getRequestHeaders(),
+      method: 'GET',
+      url: '/users/me/location-suggestion',
     });
     return data;
   };
