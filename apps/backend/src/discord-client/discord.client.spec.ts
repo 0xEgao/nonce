@@ -16,7 +16,8 @@ const config = {
     ),
 } as unknown as ConfigService;
 
-const axiosError = (status: number) =>
+// A failed Discord response: the HTTP status plus Discord's JSON error code.
+const discordError = (status: number, code: number) =>
     new AxiosError(
         `Request failed with status code ${status}`,
         'ERR_BAD_REQUEST',
@@ -25,58 +26,28 @@ const axiosError = (status: number) =>
         {
             status,
             statusText: '',
-            data: { message: 'Unknown Member', code: 10007 },
+            data: { message: 'Discord error', code },
             headers: {},
             config: { headers: new AxiosHeaders() },
         },
     );
 
-describe('DiscordClient.findGuildMember', () => {
+describe('DiscordClient.removeRoleFromMember', () => {
+    let client: DiscordClient;
+    let request: jest.SpyInstance;
+
+    beforeEach(() => {
+        client = new DiscordClient(config);
+        request = jest.spyOn((client as any).axios, 'request');
+        jest.spyOn((client as any).logger, 'error').mockImplementation(
+            () => undefined,
+        );
+    });
+
     afterEach(() => jest.restoreAllMocks());
 
-    it('returns the member when they are in the guild', async () => {
-        const client = new DiscordClient(config);
-        const member = { user: { id: 'u1', username: 'u1' }, roles: ['r1'] };
-        jest.spyOn((client as any).axios, 'request').mockResolvedValueOnce({
-            data: member,
-        });
-
-        await expect(client.findGuildMember('u1')).resolves.toEqual(member);
-    });
-
-    it('returns null without logging an error when the user is not in the guild', async () => {
-        const client = new DiscordClient(config);
-        jest.spyOn((client as any).axios, 'request').mockRejectedValueOnce(
-            axiosError(404),
-        );
-        const logError = jest.spyOn((client as any).logger, 'error');
-
-        await expect(client.findGuildMember('gone')).resolves.toBeNull();
-        expect(logError).not.toHaveBeenCalled();
-    });
-
-    it('still logs and throws on any other failure', async () => {
-        const client = new DiscordClient(config);
-        jest.spyOn((client as any).axios, 'request').mockRejectedValueOnce(
-            axiosError(403),
-        );
-        const logError = jest
-            .spyOn((client as any).logger, 'error')
-            .mockImplementation(() => undefined);
-
-        await expect(client.findGuildMember('u1')).rejects.toBeInstanceOf(
-            ServiceError,
-        );
-        expect(logError).toHaveBeenCalledTimes(1);
-    });
-});
-
-describe('DiscordClient.removeRoleFromMember', () => {
     it('sends a bot-authenticated DELETE for the member role', async () => {
-        const client = new DiscordClient(config);
-        const request = jest
-            .spyOn(client as any, 'executeRequest')
-            .mockResolvedValueOnce(undefined);
+        request.mockResolvedValueOnce({ data: undefined });
 
         await client.removeRoleFromMember('user-1', 'role-1');
 
@@ -85,5 +56,26 @@ describe('DiscordClient.removeRoleFromMember', () => {
             url: '/guilds/guild-1/members/user-1/roles/role-1',
             headers: { Authorization: 'Bot secret' },
         });
+    });
+
+    it('counts a user who has left the guild as removed', async () => {
+        request.mockRejectedValueOnce(discordError(404, 10007));
+
+        await expect(
+            client.removeRoleFromMember('gone', 'role-1'),
+        ).resolves.toBeUndefined();
+    });
+
+    it('throws on any other failure, including a role that does not exist', async () => {
+        request
+            .mockRejectedValueOnce(discordError(404, 10011))
+            .mockRejectedValueOnce(discordError(403, 50013));
+
+        await expect(
+            client.removeRoleFromMember('user-1', 'no-such-role'),
+        ).rejects.toBeInstanceOf(ServiceError);
+        await expect(
+            client.removeRoleFromMember('user-1', 'role-1'),
+        ).rejects.toBeInstanceOf(ServiceError);
     });
 });

@@ -1,260 +1,183 @@
 import { ConfigService } from '@nestjs/config';
-import { In, Repository } from 'typeorm';
+import { FindManyOptions, LessThanOrEqual, Repository } from 'typeorm';
 import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 import { Fellowship } from '@/entities/fellowship.entity';
 import { DiscordClient } from '@/discord-client/discord.client';
-import { GuildMember } from '@/discord-client/response';
 import { FellowshipStatus, FellowshipType } from '@/common/enum';
-import { ServiceError } from '@/common/errors';
 
-const DEV_ROLE = '111';
-const EDU_ROLE = '222';
-const DESIGN_ROLE = '333';
-const COHORT_ROLE = '999';
-
-const NOW = new Date('2026-11-23T04:00:00Z');
-const STARTED = new Date('2026-11-01T00:00:00Z');
-const NOT_YET_STARTED = new Date('2026-12-01T00:00:00Z');
-
-const ALL_ROLES: Record<string, string> = {
-    'discord.roles.devFellow': DEV_ROLE,
-    'discord.roles.eduFellow': EDU_ROLE,
-    'discord.roles.designFellow': DESIGN_ROLE,
+const ROLES: Record<string, string> = {
+    'discord.roles.devFellow': 'dev-role',
+    'discord.roles.eduFellow': 'edu-role',
+    'discord.roles.designFellow': 'design-role',
 };
 
-const active = (
-    type: FellowshipType,
-    discordUserId: string,
-    startDate: Date | null = STARTED,
-) =>
-    ({
-        type,
-        status: FellowshipStatus.ACTIVE,
-        startDate,
-        user: { discordUserId },
-    }) as Fellowship;
+const NOW = new Date('2026-11-24T04:00:00Z');
 
-const completed = (type: FellowshipType, discordUserId: string) =>
+const fellowship = (id: string, type: FellowshipType) =>
     ({
+        id,
         type,
-        status: FellowshipStatus.COMPLETED,
-        startDate: STARTED,
-        user: { discordUserId },
+        user: { id: `user-${id}`, discordUserId: `discord-${id}` },
     }) as Fellowship;
 
 describe('FellowDiscordRolesService.syncFellowRoles', () => {
-    let fellowshipRepository: { find: jest.Mock };
+    // What the two queries return: fellowships due a role, and completed
+    // fellowships whose role is still assigned.
+    let toGrant: Fellowship[];
+    let toRemove: Fellowship[];
+    let fellowshipRepository: {
+        find: jest.Mock;
+        existsBy: jest.Mock;
+        update: jest.Mock;
+    };
     let discordClient: {
-        findGuildMember: jest.Mock;
         attachRoleToMember: jest.Mock;
         removeRoleFromMember: jest.Mock;
     };
-    // Discord user id -> roles they hold. Absent means not in the guild.
-    let guild: Record<string, string[]>;
-
-    const build = () =>
-        new FellowDiscordRolesService(
-            fellowshipRepository as unknown as Repository<Fellowship>,
-            discordClient as unknown as DiscordClient,
-            {
-                getOrThrow: (key: string) => ALL_ROLES[key],
-            } as unknown as ConfigService,
-        );
+    let service: FellowDiscordRolesService;
 
     beforeEach(() => {
-        guild = {};
-        fellowshipRepository = { find: jest.fn().mockResolvedValue([]) };
-        discordClient = {
-            findGuildMember: jest.fn(
-                async (id: string): Promise<GuildMember | null> =>
-                    guild[id]
-                        ? { user: { id, username: id }, roles: guild[id] }
-                        : null,
+        toGrant = [];
+        toRemove = [];
+        fellowshipRepository = {
+            find: jest.fn(async (options: FindManyOptions<Fellowship>) =>
+                (options.where as { status: FellowshipStatus }).status ===
+                FellowshipStatus.ACTIVE
+                    ? toGrant
+                    : toRemove,
             ),
+            existsBy: jest.fn().mockResolvedValue(false),
+            update: jest.fn().mockResolvedValue(undefined),
+        };
+        discordClient = {
             attachRoleToMember: jest.fn().mockResolvedValue(undefined),
             removeRoleFromMember: jest.fn().mockResolvedValue(undefined),
         };
-    });
-
-    it('reads ACTIVE and COMPLETED fellowships only', async () => {
-        await build().syncFellowRoles(NOW);
-
-        expect(fellowshipRepository.find).toHaveBeenCalledWith({
-            where: {
-                status: In([
-                    FellowshipStatus.ACTIVE,
-                    FellowshipStatus.COMPLETED,
-                ]),
-            },
-            relations: { user: true },
-        });
-    });
-
-    it('grants each started fellow the role for their fellowship type', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'dev'),
-            active(FellowshipType.EDUCATOR, 'edu'),
-            active(FellowshipType.DESIGNER, 'design'),
-        ]);
-        guild = { dev: [], edu: [COHORT_ROLE], design: [] };
-
-        const result = await build().syncFellowRoles(NOW);
-
-        expect(discordClient.attachRoleToMember.mock.calls).toEqual([
-            ['dev', DEV_ROLE],
-            ['edu', EDU_ROLE],
-            ['design', DESIGN_ROLE],
-        ]);
-        expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
-        expect(result).toEqual({
-            granted: 3,
-            removed: 0,
-            failed: 0,
-            notInGuild: 0,
-        });
-    });
-
-    it('does not grant before the contract start date', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'future', NOT_YET_STARTED),
-            active(FellowshipType.DEVELOPER, 'no-date', null),
-        ]);
-        guild = { future: [], 'no-date': [] };
-
-        const result = await build().syncFellowRoles(NOW);
-
-        expect(discordClient.attachRoleToMember).not.toHaveBeenCalled();
-        expect(result.granted).toBe(0);
-    });
-
-    it('grants on the start date itself', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'today', NOW),
-        ]);
-        guild = { today: [] };
-
-        await build().syncFellowRoles(NOW);
-
-        expect(discordClient.attachRoleToMember).toHaveBeenCalledWith(
-            'today',
-            DEV_ROLE,
+        service = new FellowDiscordRolesService(
+            fellowshipRepository as unknown as Repository<Fellowship>,
+            discordClient as unknown as DiscordClient,
+            {
+                getOrThrow: (key: string) => ROLES[key],
+            } as unknown as ConfigService,
         );
     });
 
-    it('does not re-grant a role the fellow already holds', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'dev'),
-        ]);
-        guild = { dev: [DEV_ROLE] };
+    it('looks for started ACTIVE fellowships without the role, and COMPLETED ones with it', async () => {
+        await service.syncFellowRoles(NOW);
 
-        const result = await build().syncFellowRoles(NOW);
+        expect(fellowshipRepository.find.mock.calls).toEqual([
+            [
+                {
+                    where: {
+                        status: FellowshipStatus.ACTIVE,
+                        startDate: LessThanOrEqual(NOW),
+                        discordRoleAssigned: false,
+                    },
+                    relations: { user: true },
+                },
+            ],
+            [
+                {
+                    where: {
+                        status: FellowshipStatus.COMPLETED,
+                        discordRoleAssigned: true,
+                    },
+                    relations: { user: true },
+                },
+            ],
+        ]);
+    });
+
+    it('calls Discord for nobody when no fellowship is due a change', async () => {
+        await service.syncFellowRoles(NOW);
 
         expect(discordClient.attachRoleToMember).not.toHaveBeenCalled();
-        expect(result.granted).toBe(0);
-    });
-
-    it('removes the role when the fellowship of that type has ended', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            completed(FellowshipType.DEVELOPER, 'ex'),
-        ]);
-        guild = { ex: [DEV_ROLE, COHORT_ROLE] };
-
-        const result = await build().syncFellowRoles(NOW);
-
-        expect(discordClient.removeRoleFromMember.mock.calls).toEqual([
-            ['ex', DEV_ROLE],
-        ]);
-        expect(result.removed).toBe(1);
-    });
-
-    it('never looks up anyone without a fellowship, so hand-granted roles stay', async () => {
-        guild = { 'pre-app-fellow': [DEV_ROLE, EDU_ROLE] };
-
-        await build().syncFellowRoles(NOW);
-
-        expect(discordClient.findGuildMember).not.toHaveBeenCalled();
         expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
+        expect(fellowshipRepository.update).not.toHaveBeenCalled();
     });
 
-    it('leaves a fellow role of another type alone, even if granted by hand', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'dev'),
-            completed(FellowshipType.EDUCATOR, 'ex-edu'),
-        ]);
-        guild = {
-            dev: [DEV_ROLE, DESIGN_ROLE],
-            'ex-edu': [EDU_ROLE, DEV_ROLE],
-        };
+    it('grants the role for the fellowship type and records it', async () => {
+        toGrant = [
+            fellowship('dev', FellowshipType.DEVELOPER),
+            fellowship('edu', FellowshipType.EDUCATOR),
+            fellowship('design', FellowshipType.DESIGNER),
+        ];
 
-        await build().syncFellowRoles(NOW);
-
-        expect(discordClient.removeRoleFromMember.mock.calls).toEqual([
-            ['ex-edu', EDU_ROLE],
-        ]);
-    });
-
-    it('keeps the role of a returning fellow whose new contract has not started yet', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            completed(FellowshipType.DEVELOPER, 'returning'),
-            active(FellowshipType.DEVELOPER, 'returning', NOT_YET_STARTED),
-        ]);
-        guild = { returning: [DEV_ROLE] };
-
-        const result = await build().syncFellowRoles(NOW);
-
-        expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
-        expect(discordClient.attachRoleToMember).not.toHaveBeenCalled();
-        expect(result).toEqual({
-            granted: 0,
-            removed: 0,
-            failed: 0,
-            notInGuild: 0,
-        });
-    });
-
-    it('counts started fellows who are not in the guild, but not ex-fellows', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'gone'),
-            active(FellowshipType.EDUCATOR, 'gone'),
-            completed(FellowshipType.DESIGNER, 'ex-gone'),
-        ]);
-
-        const result = await build().syncFellowRoles(NOW);
-
-        expect(discordClient.findGuildMember).toHaveBeenCalledTimes(2);
-        expect(result).toEqual({
-            granted: 0,
-            removed: 0,
-            failed: 0,
-            notInGuild: 1,
-        });
-    });
-
-    it('keeps going past failed lookups and changes, and counts them', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DEVELOPER, 'lookup-fails'),
-            active(FellowshipType.DEVELOPER, 'grant-fails'),
-            active(FellowshipType.DEVELOPER, 'ok'),
-        ]);
-        guild = { 'grant-fails': [], ok: [] };
-        discordClient.findGuildMember.mockImplementationOnce(async () => {
-            throw new ServiceError('rate limited');
-        });
-        discordClient.attachRoleToMember
-            .mockRejectedValueOnce(new Error('Missing Permissions'))
-            .mockResolvedValueOnce(undefined);
-
-        const result = await build().syncFellowRoles(NOW);
+        await service.syncFellowRoles(NOW);
 
         expect(discordClient.attachRoleToMember.mock.calls).toEqual([
-            ['grant-fails', DEV_ROLE],
-            ['ok', DEV_ROLE],
+            ['discord-dev', 'dev-role'],
+            ['discord-edu', 'edu-role'],
+            ['discord-design', 'design-role'],
         ]);
-        expect(result).toEqual({
-            granted: 1,
-            removed: 0,
-            failed: 2,
-            notInGuild: 0,
+        expect(fellowshipRepository.update.mock.calls).toEqual([
+            ['dev', { discordRoleAssigned: true }],
+            ['edu', { discordRoleAssigned: true }],
+            ['design', { discordRoleAssigned: true }],
+        ]);
+    });
+
+    it('leaves a failed grant unrecorded, so the next run retries it, and carries on', async () => {
+        toGrant = [
+            fellowship('fails', FellowshipType.DEVELOPER),
+            fellowship('ok', FellowshipType.DEVELOPER),
+        ];
+        discordClient.attachRoleToMember.mockRejectedValueOnce(
+            new Error('Unknown Member'),
+        );
+
+        await service.syncFellowRoles(NOW);
+
+        expect(fellowshipRepository.update.mock.calls).toEqual([
+            ['ok', { discordRoleAssigned: true }],
+        ]);
+    });
+
+    it('removes the role of a completed fellowship and records it', async () => {
+        toRemove = [fellowship('ex', FellowshipType.EDUCATOR)];
+
+        await service.syncFellowRoles(NOW);
+
+        expect(fellowshipRepository.existsBy).toHaveBeenCalledWith({
+            user: { id: 'user-ex' },
+            type: FellowshipType.EDUCATOR,
+            status: FellowshipStatus.ACTIVE,
         });
+        expect(discordClient.removeRoleFromMember.mock.calls).toEqual([
+            ['discord-ex', 'edu-role'],
+        ]);
+        expect(fellowshipRepository.update.mock.calls).toEqual([
+            ['ex', { discordRoleAssigned: false }],
+        ]);
+    });
+
+    it('keeps the role of someone with another ACTIVE fellowship of that type', async () => {
+        toRemove = [fellowship('renewed', FellowshipType.DEVELOPER)];
+        fellowshipRepository.existsBy.mockResolvedValue(true);
+
+        await service.syncFellowRoles(NOW);
+
+        expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
+        // The completed fellowship lets go of the role; the active one now
+        // decides when it is removed.
+        expect(fellowshipRepository.update.mock.calls).toEqual([
+            ['renewed', { discordRoleAssigned: false }],
+        ]);
+    });
+
+    it('leaves a failed removal recorded as assigned, so the next run retries it, and carries on', async () => {
+        toRemove = [
+            fellowship('fails', FellowshipType.DESIGNER),
+            fellowship('ok', FellowshipType.DESIGNER),
+        ];
+        discordClient.removeRoleFromMember.mockRejectedValueOnce(
+            new Error('Missing Permissions'),
+        );
+
+        await service.syncFellowRoles(NOW);
+
+        expect(fellowshipRepository.update.mock.calls).toEqual([
+            ['ok', { discordRoleAssigned: false }],
+        ]);
     });
 });

@@ -256,7 +256,7 @@ export class FellowshipsService {
 
             // After the sweep, so a fellowship completed this run loses its
             // role in the same run.
-            await this.syncFellowDiscordRoles();
+            await this.fellowDiscordRolesService.syncFellowRoles();
 
             await this.scheduleNextCompleteEndedFellowships();
         } catch (error) {
@@ -271,26 +271,6 @@ export class FellowshipsService {
             }
 
             throw error;
-        }
-    }
-
-    // Best-effort: a Discord outage or a missing bot permission must not fail
-    // the sweep, whose retries would re-run it for nothing. The next daily run
-    // recomputes every role from scratch, so a skipped run self-heals.
-    private async syncFellowDiscordRoles(): Promise<void> {
-        try {
-            const { granted, removed, failed, notInGuild } =
-                await this.fellowDiscordRolesService.syncFellowRoles();
-            if (granted || removed || failed || notInGuild) {
-                this.logger.log(
-                    `Fellow Discord roles: ${granted} granted, ${removed} removed, ${failed} failed, ${notInGuild} active fellow(s) not in the guild`,
-                );
-            }
-        } catch (error) {
-            this.logger.error(
-                `Failed to sync fellow Discord roles: ${error?.message}`,
-                error?.stack,
-            );
         }
     }
 

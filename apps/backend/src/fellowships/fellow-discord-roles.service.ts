@@ -1,49 +1,20 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { LessThanOrEqual, Repository } from 'typeorm';
 import { Fellowship } from '@/entities/fellowship.entity';
 import { FellowshipStatus, FellowshipType } from '@/common/enum';
 import { DiscordClient } from '@/discord-client/discord.client';
-import { GuildMember } from '@/discord-client/response';
-
-const FELLOW_ROLE_CONFIG_KEYS: Record<FellowshipType, string> = {
-    [FellowshipType.DEVELOPER]: 'discord.roles.devFellow',
-    [FellowshipType.EDUCATOR]: 'discord.roles.eduFellow',
-    [FellowshipType.DESIGNER]: 'discord.roles.designFellow',
-};
-
-export interface FellowRoleSyncResult {
-    granted: number;
-    removed: number;
-    failed: number;
-    // Fellows due a role whom the bot could not find in the guild.
-    notInGuild: number;
-}
-
-// Per Discord user: the fellow roles to hold, to drop, and to leave alone.
-interface RolePlan {
-    grant: Set<string>;
-    revoke: Set<string>;
-    keep: Set<string>;
-}
 
 /**
- * Keeps the Discord fellow roles (dev-fellow, edu-fellows, design-fellow) in
- * step with fellowships in the app:
+ * Gives a fellow the Discord role for their fellowship type (dev-fellow,
+ * edu-fellows, design-fellow) once the contract has started, and takes it back
+ * once the fellowship is COMPLETED.
  *
- * - Grant: an ACTIVE fellowship whose contract startDate has passed gets the
- *   role for its type. Not on accept, and not when an admin starts a contract
- *   dated in the future: the role starts when the contract does.
- * - Remove: only from someone whose fellowship of that type has ended in the
- *   app (COMPLETED) and who has no ACTIVE one of that type.
- *
- * Nobody else is touched. Roles granted by hand (e.g. fellows from before the
- * app) stay, because the app has no fellowship that says they should go. The
- * sync therefore only looks up the app's own fellows, never the whole guild.
- *
- * Desired state is recomputed from scratch on every run, so a failed change is
- * retried by the next run; nothing is persisted.
+ * fellowship.discordRoleAssigned records that the app granted the role. So
+ * each fellowship is granted once and removed once, and a role the app did not
+ * grant is never removed. A failed Discord call leaves the flag as it was, and
+ * the next daily run tries again.
  */
 @Injectable()
 export class FellowDiscordRolesService {
@@ -56,126 +27,94 @@ export class FellowDiscordRolesService {
         private readonly discordClient: DiscordClient,
         configService: ConfigService,
     ) {
-        const roleId = (type: FellowshipType) =>
-            configService.getOrThrow<string>(FELLOW_ROLE_CONFIG_KEYS[type]);
         this.roleIdByType = {
-            [FellowshipType.DEVELOPER]: roleId(FellowshipType.DEVELOPER),
-            [FellowshipType.EDUCATOR]: roleId(FellowshipType.EDUCATOR),
-            [FellowshipType.DESIGNER]: roleId(FellowshipType.DESIGNER),
+            [FellowshipType.DEVELOPER]: configService.getOrThrow<string>(
+                'discord.roles.devFellow',
+            ),
+            [FellowshipType.EDUCATOR]: configService.getOrThrow<string>(
+                'discord.roles.eduFellow',
+            ),
+            [FellowshipType.DESIGNER]: configService.getOrThrow<string>(
+                'discord.roles.designFellow',
+            ),
         };
     }
 
-    async syncFellowRoles(
-        now: Date = new Date(),
-    ): Promise<FellowRoleSyncResult> {
-        const result: FellowRoleSyncResult = {
-            granted: 0,
-            removed: 0,
-            failed: 0,
-            notInGuild: 0,
-        };
-
-        const plans = await this.planRoles(now);
-
-        for (const [discordUserId, plan] of plans) {
-            let member: GuildMember | null;
-            try {
-                member =
-                    await this.discordClient.findGuildMember(discordUserId);
-            } catch (error) {
-                result.failed++;
-                this.logger.warn(
-                    `Failed to read Discord member ${discordUserId} for fellow role sync: ${error?.message}`,
-                );
-                continue;
-            }
-            if (!member) {
-                // An ex-fellow who left the guild has nothing to remove.
-                if (plan.grant.size > 0) result.notInGuild++;
-                continue;
-            }
-            const { roles } = member;
-
-            for (const roleId of plan.grant) {
-                if (roles.includes(roleId)) continue;
-                await this.change('grant', discordUserId, roleId, result);
-            }
-            for (const roleId of plan.revoke) {
-                if (!roles.includes(roleId) || plan.keep.has(roleId)) continue;
-                await this.change('remove', discordUserId, roleId, result);
-            }
-        }
-
-        return result;
+    async syncFellowRoles(now: Date = new Date()): Promise<void> {
+        await this.grantRolesForStartedFellowships(now);
+        await this.removeRolesForCompletedFellowships();
     }
 
-    private async planRoles(now: Date): Promise<Map<string, RolePlan>> {
+    private async grantRolesForStartedFellowships(now: Date): Promise<void> {
         const fellowships = await this.fellowshipRepository.find({
             where: {
-                status: In([
-                    FellowshipStatus.ACTIVE,
-                    FellowshipStatus.COMPLETED,
-                ]),
+                status: FellowshipStatus.ACTIVE,
+                startDate: LessThanOrEqual(now),
+                discordRoleAssigned: false,
             },
             relations: { user: true },
         });
 
-        const plans = new Map<string, RolePlan>();
         for (const fellowship of fellowships) {
             const roleId = this.roleIdByType[fellowship.type];
-
-            const discordUserId = fellowship.user.discordUserId;
-            let plan = plans.get(discordUserId);
-            if (!plan) {
-                plan = { grant: new Set(), revoke: new Set(), keep: new Set() };
-                plans.set(discordUserId, plan);
-            }
-
-            if (fellowship.status === FellowshipStatus.COMPLETED) {
-                plan.revoke.add(roleId);
-                continue;
-            }
-            // ACTIVE. A contract dated in the future does not grant yet, but
-            // it does protect the role from an earlier COMPLETED fellowship
-            // of the same type, so a returning fellow is not dropped in between.
-            plan.keep.add(roleId);
-            if (fellowship.startDate && fellowship.startDate <= now) {
-                plan.grant.add(roleId);
-            }
-        }
-        return plans;
-    }
-
-    // Each change is logged by user and role: the log is the record of who
-    // the sync granted or removed, and so the way to undo a bad run.
-    private async change(
-        action: 'grant' | 'remove',
-        discordUserId: string,
-        roleId: string,
-        result: FellowRoleSyncResult,
-    ): Promise<void> {
-        try {
-            if (action === 'grant') {
+            const { discordUserId } = fellowship.user;
+            try {
                 await this.discordClient.attachRoleToMember(
                     discordUserId,
                     roleId,
                 );
-                result.granted++;
-            } else {
-                await this.discordClient.removeRoleFromMember(
-                    discordUserId,
-                    roleId,
+                await this.fellowshipRepository.update(fellowship.id, {
+                    discordRoleAssigned: true,
+                });
+                this.logger.log(
+                    `Fellow role ${roleId} granted to Discord user ${discordUserId}`,
                 );
-                result.removed++;
+            } catch (error) {
+                this.logger.warn(
+                    `Failed to grant fellow role ${roleId} to Discord user ${discordUserId}: ${error?.message}`,
+                );
             }
-            this.logger.log(
-                `Fellow role ${roleId} ${action === 'grant' ? 'granted to' : 'removed from'} Discord user ${discordUserId}`,
-            );
-        } catch (error) {
-            result.failed++;
-            this.logger.warn(
-                `Failed to ${action} fellow role ${roleId} for Discord user ${discordUserId}: ${error?.message}`,
-            );
+        }
+    }
+
+    private async removeRolesForCompletedFellowships(): Promise<void> {
+        const fellowships = await this.fellowshipRepository.find({
+            where: {
+                status: FellowshipStatus.COMPLETED,
+                discordRoleAssigned: true,
+            },
+            relations: { user: true },
+        });
+
+        for (const fellowship of fellowships) {
+            const roleId = this.roleIdByType[fellowship.type];
+            const { discordUserId } = fellowship.user;
+            try {
+                // Someone with another running fellowship of this type is
+                // still a fellow: they keep the role, and that fellowship
+                // removes it when it completes.
+                const isStillFellow = await this.fellowshipRepository.existsBy({
+                    user: { id: fellowship.user.id },
+                    type: fellowship.type,
+                    status: FellowshipStatus.ACTIVE,
+                });
+                if (!isStillFellow) {
+                    await this.discordClient.removeRoleFromMember(
+                        discordUserId,
+                        roleId,
+                    );
+                    this.logger.log(
+                        `Fellow role ${roleId} removed from Discord user ${discordUserId}`,
+                    );
+                }
+                await this.fellowshipRepository.update(fellowship.id, {
+                    discordRoleAssigned: false,
+                });
+            } catch (error) {
+                this.logger.warn(
+                    `Failed to remove fellow role ${roleId} from Discord user ${discordUserId}: ${error?.message}`,
+                );
+            }
         }
     }
 }

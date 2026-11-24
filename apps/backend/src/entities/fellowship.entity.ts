@@ -53,6 +53,11 @@ export class Fellowship extends BaseEntity {
     @Column('text', { nullable: true })
     driveFolderUrl!: string | null;
 
+    // True while the fellow holds the Discord fellow role because of this
+    // fellowship: set when the app grants it, cleared when the app removes it.
+    @Column('boolean', { default: false })
+    discordRoleAssigned!: boolean;
+
     @ManyToOne(() => User)
     user!: User;
 

@@ -9,6 +9,9 @@ import {
     GuildPartial,
 } from '@/discord-client/response';
 
+// Discord's JSON error code for a user who is not in the guild.
+const UNKNOWN_MEMBER_ERROR_CODE = 10007;
+
 @Injectable()
 export class DiscordClient {
     private readonly logger = new Logger(DiscordClient.name);
@@ -37,13 +40,10 @@ export class DiscordClient {
             this.configService.getOrThrow<string>('discord.botToken');
     }
 
-    // `expectedStatuses` are answers the caller handles (e.g. 404 for a user
-    // not in the guild): still thrown, but not logged as a failure.
     private async executeRequest<T>(
         config: AxiosRequestConfig,
         attempt = 1,
         maxRetries = 3,
-        expectedStatuses: number[] = [],
     ): Promise<T> {
         try {
             const response = await this.axios.request<T>(config);
@@ -58,21 +58,10 @@ export class DiscordClient {
                 await new Promise((resolve) =>
                     setTimeout(resolve, 1000 * attempt),
                 );
-                return this.executeRequest<T>(
-                    config,
-                    attempt + 1,
-                    maxRetries,
-                    expectedStatuses,
-                );
+                return this.executeRequest<T>(config, attempt + 1, maxRetries);
             }
 
             if (error instanceof AxiosError && error.response) {
-                if (expectedStatuses.includes(error.response.status)) {
-                    throw new ServiceError(
-                        JSON.stringify(error.response.data),
-                        { cause: error },
-                    );
-                }
                 this.logger.error(
                     `Request to Discord failed!\nURL:\n${
                         config.url
@@ -193,47 +182,30 @@ export class DiscordClient {
     }
 
     /**
-     * The guild member, or null if the user is not in the guild. Unlike
-     * getGuildMember, "not in the guild" is an answer here, not an error, so
-     * the 404 is not logged: the daily fellow role sync looks up ex-fellows
-     * who have left the server every day.
+     * Removes a role from a guild member. Someone who has left the guild holds
+     * no roles, so Discord's "Unknown Member" answer counts as removed.
      */
-    async findGuildMember(discordUserId: string): Promise<GuildMember | null> {
-        try {
-            return await this.executeRequest<GuildMember>(
-                {
-                    method: 'GET',
-                    url: `/guilds/${this.guildId}/members/${discordUserId}`,
-                    headers: {
-                        Authorization: `Bot ${this.botToken}`,
-                    },
-                },
-                1,
-                3,
-                [404],
-            );
-        } catch (error) {
-            if (
-                error.cause instanceof AxiosError &&
-                error.cause.response?.status === 404
-            ) {
-                return null;
-            }
-            throw error;
-        }
-    }
-
     async removeRoleFromMember(
         discordUserId: string,
         roleId: string,
     ): Promise<void> {
-        await this.executeRequest({
-            method: 'DELETE',
-            url: `/guilds/${this.guildId}/members/${discordUserId}/roles/${roleId}`,
-            headers: {
-                Authorization: `Bot ${this.botToken}`,
-            },
-        });
+        try {
+            await this.executeRequest({
+                method: 'DELETE',
+                url: `/guilds/${this.guildId}/members/${discordUserId}/roles/${roleId}`,
+                headers: {
+                    Authorization: `Bot ${this.botToken}`,
+                },
+            });
+        } catch (error) {
+            if (
+                error.cause instanceof AxiosError &&
+                error.cause.response?.data?.code === UNKNOWN_MEMBER_ERROR_CODE
+            ) {
+                return;
+            }
+            throw error;
+        }
     }
 
     async attachRoleToMember(

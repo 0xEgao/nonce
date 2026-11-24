@@ -336,12 +336,9 @@ describe('FellowshipsService — completeEndedFellowships', () => {
 
     describe('handleCompleteEndedFellowships', () => {
         beforeEach(() => {
-            fellowDiscordRolesService.syncFellowRoles.mockResolvedValue({
-                granted: 0,
-                removed: 0,
-                failed: 0,
-                notInGuild: 0,
-            });
+            fellowDiscordRolesService.syncFellowRoles.mockResolvedValue(
+                undefined,
+            );
         });
 
         it('syncs fellow Discord roles after the sweep', async () => {
@@ -353,26 +350,12 @@ describe('FellowshipsService — completeEndedFellowships', () => {
             fellowDiscordRolesService.syncFellowRoles.mockImplementation(
                 async () => {
                     order.push('roles');
-                    return { granted: 0, removed: 1, failed: 0, notInGuild: 0 };
                 },
             );
 
             await service.handleCompleteEndedFellowships(task(0));
 
             expect(order).toEqual(['sweep', 'roles']);
-        });
-
-        it('still succeeds and queues the next run when the role sync fails', async () => {
-            fellowshipRepository.update.mockResolvedValue({ affected: 0 });
-            fellowDiscordRolesService.syncFellowRoles.mockRejectedValue(
-                new Error('Missing Access'),
-            );
-
-            await expect(
-                service.handleCompleteEndedFellowships(task(0)),
-            ).resolves.toBeUndefined();
-
-            expect(apiTaskRepository.save).toHaveBeenCalledTimes(1);
         });
 
         it('sweeps, then queues exactly one next run', async () => {
