@@ -26,6 +26,7 @@ import { addMonths, escapeLikePattern } from '@/common/common';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
 import { TaskType } from '@/task-processor/task.enums';
 import { isLastRetry } from '@/task-processor/task-processor.utils';
+import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 
 // The sweep runs daily at this UTC hour.
 const COMPLETE_ENDED_FELLOWSHIPS_HOUR_UTC = 4;
@@ -47,6 +48,7 @@ export class FellowshipsService {
         @InjectRepository(APITask)
         private readonly apiTaskRepository: Repository<APITask<any>>,
         private readonly dbTransactionService: DbTransactionService,
+        private readonly fellowDiscordRolesService: FellowDiscordRolesService,
     ) {}
 
     async startContract(
@@ -251,6 +253,10 @@ export class FellowshipsService {
                     `Marked ${completed} ended fellowship(s) as COMPLETED`,
                 );
             }
+
+            // After the sweep, so a fellowship completed this run loses its
+            // role in the same run.
+            await this.fellowDiscordRolesService.syncFellowRoles();
 
             await this.scheduleNextCompleteEndedFellowships();
         } catch (error) {

@@ -8,6 +8,7 @@ import { Fellowship } from '@/entities/fellowship.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { TaskType } from '@/task-processor/task.enums';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
+import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 import {
     FellowshipStatus,
     FellowshipType,
@@ -18,6 +19,10 @@ import {
 // after startDate, cannot be more than 24 months from today, and (now that
 // the backend no longer derives it from a duration) the submitted endDate is
 // what gets persisted verbatim.
+
+// Shared by every suite below; only the daily-job tests give it behaviour.
+const fellowDiscordRolesService = { syncFellowRoles: jest.fn() };
+
 describe('FellowshipsService — startContract', () => {
     let service: FellowshipsService;
 
@@ -67,6 +72,10 @@ describe('FellowshipsService — startContract', () => {
                 {
                     provide: DbTransactionService,
                     useValue: dbTransactionService,
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -185,6 +194,10 @@ describe('FellowshipsService — listPublicFellows', () => {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
                 },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
+                },
             ],
         }).compile();
 
@@ -300,6 +313,10 @@ describe('FellowshipsService — completeEndedFellowships', () => {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
                 },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
+                },
             ],
         }).compile();
 
@@ -372,6 +389,29 @@ describe('FellowshipsService — completeEndedFellowships', () => {
     });
 
     describe('handleCompleteEndedFellowships', () => {
+        beforeEach(() => {
+            fellowDiscordRolesService.syncFellowRoles.mockResolvedValue(
+                undefined,
+            );
+        });
+
+        it('syncs fellow Discord roles after the sweep', async () => {
+            const order: string[] = [];
+            fellowshipRepository.update.mockImplementation(async () => {
+                order.push('sweep');
+                return { affected: 1 };
+            });
+            fellowDiscordRolesService.syncFellowRoles.mockImplementation(
+                async () => {
+                    order.push('roles');
+                },
+            );
+
+            await service.handleCompleteEndedFellowships(task(0));
+
+            expect(order).toEqual(['sweep', 'roles']);
+        });
+
         it('sweeps, then queues exactly one next run', async () => {
             jest.useFakeTimers().setSystemTime(
                 new Date('2026-11-16T04:00:05Z'),

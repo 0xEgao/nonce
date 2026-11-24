@@ -9,6 +9,9 @@ import {
     GuildPartial,
 } from '@/discord-client/response';
 
+// Discord's JSON error code for a user who is not in the guild.
+const UNKNOWN_MEMBER_ERROR_CODE = 10007;
+
 @Injectable()
 export class DiscordClient {
     private readonly logger = new Logger(DiscordClient.name);
@@ -176,6 +179,33 @@ export class DiscordClient {
                 Authorization: `Bot ${this.botToken}`,
             },
         });
+    }
+
+    /**
+     * Removes a role from a guild member. Someone who has left the guild holds
+     * no roles, so Discord's "Unknown Member" answer counts as removed.
+     */
+    async removeRoleFromMember(
+        discordUserId: string,
+        roleId: string,
+    ): Promise<void> {
+        try {
+            await this.executeRequest({
+                method: 'DELETE',
+                url: `/guilds/${this.guildId}/members/${discordUserId}/roles/${roleId}`,
+                headers: {
+                    Authorization: `Bot ${this.botToken}`,
+                },
+            });
+        } catch (error) {
+            if (
+                error.cause instanceof AxiosError &&
+                error.cause.response?.data?.code === UNKNOWN_MEMBER_ERROR_CODE
+            ) {
+                return;
+            }
+            throw error;
+        }
     }
 
     async attachRoleToMember(
