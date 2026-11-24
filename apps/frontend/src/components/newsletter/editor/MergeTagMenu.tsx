@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Button, Menu, MenuItem, Typography } from '@mui/material';
 import { Braces, ChevronDown } from 'lucide-react';
 import { fontFamilyMono } from '../../fellowship/theme';
-import { MERGE_TAGS, type MergeTag } from '../composer/newsletterUtils';
+import { MERGE_TAGS, type MergeTag } from '../composer/composerUtils';
 
 interface Props {
   onInsert: (tag: MergeTag) => void;

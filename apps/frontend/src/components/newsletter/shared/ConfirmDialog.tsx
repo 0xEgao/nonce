@@ -2,85 +2,88 @@ import { useState, type ReactNode } from 'react';
 import {
   Alert,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Typography,
 } from '@mui/material';
-import { extractErrorMessage } from '../../../utils/errorUtils';
+import { apiErrorMessage } from './newsletterUtils';
 
 interface Props {
+  /** Leave out to open on mount and close by unmounting. */
+  open?: boolean;
   title: string;
   children: ReactNode;
   confirmLabel: string;
   /** Red confirm button, for actions that cannot be undone. */
   destructive?: boolean;
+  onClose: () => void;
   /** A rejection keeps the dialog open and shows the API's message. */
   onConfirm: () => Promise<unknown>;
-  onClose: () => void;
 }
 
 /**
- * Mount it while it should be open; unmounting resets it. The API explains
- * why it refused (e.g. a list a newsletter still uses), so that message is
- * shown in the dialog rather than lost in a toast.
+ * The API explains why it refused (e.g. a list a newsletter still uses), so
+ * that message is shown in the dialog rather than lost in a toast.
  */
 const ConfirmDialog = ({
+  open = true,
   title,
   children,
   confirmLabel,
   destructive = false,
-  onConfirm,
   onClose,
+  onConfirm,
 }: Props) => {
-  const [pending, setPending] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const close = () => {
+    if (busy) return;
+    setError(null);
+    onClose();
+  };
+
   const confirm = async () => {
-    setPending(true);
+    setBusy(true);
     setError(null);
     try {
       await onConfirm();
       onClose();
     } catch (e) {
-      setError(extractErrorMessage(e));
-      setPending(false);
+      setError(apiErrorMessage(e));
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <Dialog
-      open
-      onClose={pending ? undefined : onClose}
-      fullWidth
-      maxWidth="xs"
-    >
+    <Dialog open={open} onClose={close} fullWidth maxWidth="xs">
       <DialogTitle sx={{ fontWeight: 700 }}>{title}</DialogTitle>
-      <DialogContent sx={{ color: 'text.secondary', fontSize: '0.9rem' }}>
-        {children}
+      <DialogContent>
         {error && (
-          <Alert severity="error" sx={{ mt: 2 }}>
+          <Alert severity="error" sx={{ mb: 2 }}>
             {error}
           </Alert>
         )}
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button
-          onClick={onClose}
-          disabled={pending}
+        <Typography
+          variant="body2"
+          component="div"
           sx={{ color: 'text.secondary' }}
         >
+          {children}
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={close} disabled={busy}>
           Cancel
         </Button>
         <Button
           variant="contained"
           color={destructive ? 'error' : 'primary'}
           onClick={confirm}
-          disabled={pending}
-          startIcon={
-            pending ? <CircularProgress size={14} color="inherit" /> : undefined
-          }
+          disabled={busy}
         >
           {confirmLabel}
         </Button>

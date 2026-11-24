@@ -20,7 +20,7 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useNewsletterAudience } from '../../../hooks/newsletterHooks';
 import { fontFamilyMono } from '../../fellowship/theme';
-import { apiErrorMessage, plural } from './newsletterUtils';
+import { apiErrorMessage, plural } from '../shared/newsletterUtils';
 
 interface Props {
   open: boolean;

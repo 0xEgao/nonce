@@ -1,11 +1,16 @@
 import { Chip } from '@mui/material';
-import { SubscriberStatus, SubscriptionStatus } from '@nonce/shared';
+import {
+  type NewsletterDeliveryStatus,
+  type NewsletterStatus,
+  SubscriberStatus,
+  SubscriptionStatus,
+} from '@nonce/shared';
 import {
   SUBSCRIBER_STATUS_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
 } from './newsletterUtils';
 
-type Tone = 'green' | 'amber' | 'red' | 'grey' | 'blue';
+type Tone = 'green' | 'amber' | 'red' | 'grey' | 'blue' | 'violet';
 
 // Same palette as the fellowship StatusChip, so the admin tables read alike.
 const TONES: Record<Tone, { bg: string; color: string; border: string }> = {
@@ -34,6 +39,11 @@ const TONES: Record<Tone, { bg: string; color: string; border: string }> = {
     color: '#60a5fa',
     border: 'rgba(96,165,250,0.3)',
   },
+  violet: {
+    bg: 'rgba(167,139,250,0.12)',
+    color: '#a78bfa',
+    border: 'rgba(167,139,250,0.3)',
+  },
 };
 
 const ToneChip = ({
@@ -60,6 +70,37 @@ const ToneChip = ({
       }}
     />
   );
+};
+
+// Newsletter and delivery statuses share SENDING and SENT, with the same
+// meaning, so one table covers both.
+const NEWSLETTER_STATUS_STYLE: Record<
+  NewsletterStatus | NewsletterDeliveryStatus,
+  { tone: Tone; label: string }
+> = {
+  DRAFT: { tone: 'grey', label: 'Draft' },
+  SCHEDULED: { tone: 'blue', label: 'Scheduled' },
+  SENDING: { tone: 'amber', label: 'Sending' },
+  SENT: { tone: 'green', label: 'Sent' },
+  CANCELLED: { tone: 'red', label: 'Cancelled' },
+  PENDING: { tone: 'grey', label: 'Pending' },
+  FAILED: { tone: 'red', label: 'Failed' },
+  SKIPPED: { tone: 'violet', label: 'Skipped' },
+};
+
+export const NewsletterStatusChip = ({
+  status,
+  label,
+}: {
+  status: NewsletterStatus | NewsletterDeliveryStatus;
+  /** Overrides the label, e.g. "Paused" for a held-back send. */
+  label?: string;
+}) => {
+  const style = NEWSLETTER_STATUS_STYLE[status] ?? {
+    tone: 'grey' as const,
+    label: status,
+  };
+  return <ToneChip label={label ?? style.label} tone={style.tone} />;
 };
 
 const SUBSCRIPTION_TONES: Record<SubscriptionStatus, Tone> = {

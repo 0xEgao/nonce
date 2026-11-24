@@ -1,7 +1,7 @@
 import type { AddSubscriberEntry } from '@nonce/shared';
+import { EMAIL_MAX_LENGTH, normalizeEmail } from '../shared/newsletterUtils';
 
-// Mirrors the column lengths the API validates against.
-export const EMAIL_MAX_LENGTH = 320;
+// Mirrors the column length the API validates against.
 export const SUBSCRIBER_NAME_MAX_LENGTH = 255;
 /** AddSubscribersRequest takes 1..5000 entries. */
 export const MAX_IMPORT_SUBSCRIBERS = 5000;
@@ -46,7 +46,7 @@ export const parseSubscriberText = (text: string): ParsedSubscribers => {
   let duplicates = 0;
 
   const add = (rawEmail: string, rawName?: string) => {
-    const email = rawEmail.trim().toLowerCase();
+    const email = normalizeEmail(rawEmail);
     const name = cleanName(rawName);
     const existing = byEmail.get(email);
     if (existing) {

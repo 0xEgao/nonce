@@ -55,6 +55,10 @@ import {
   SUBSCRIPTION_SOURCE_LABELS,
   downloadBlob,
 } from '../../../components/newsletter/shared/newsletterUtils';
+import {
+  monoSx,
+  tableFrameSx,
+} from '../../../components/newsletter/shared/tableStyles';
 import { usePaging } from '../../../components/newsletter/shared/usePaging';
 import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
@@ -416,14 +420,7 @@ const MailingListDetail = () => {
         />
       </Stack>
 
-      <TableContainer
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <TableContainer sx={tableFrameSx}>
         <Table size="small" sx={{ minWidth: 760 }}>
           <TableHead>
             <TableRow>
@@ -490,14 +487,7 @@ const MailingListDetail = () => {
                   >
                     {SUBSCRIPTION_SOURCE_LABELS[row.source]}
                   </TableCell>
-                  <TableCell
-                    sx={{
-                      fontFamily: fontFamilyMono,
-                      fontSize: '0.78rem',
-                      color: 'text.secondary',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <TableCell sx={monoSx}>
                     {formatCohortDate(row.confirmedAt ?? row.createdAt)}
                     {row.unsubscribedAt && (
                       <Box component="div" sx={{ fontSize: '0.7rem' }}>

@@ -17,7 +17,7 @@ import { useNewsletter } from '../../../hooks/newsletterHooks';
 import {
   apiErrorMessage,
   isPausedNow,
-} from '../../../components/newsletter/composer/newsletterUtils';
+} from '../../../components/newsletter/shared/newsletterUtils';
 import { isAxiosError } from '../../../utils/errorUtils';
 
 const LIVE_POLL_MS = 4000;

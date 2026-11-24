@@ -50,24 +50,26 @@ import {
 import { useDebounce } from '../../../hooks/useDebounce';
 import { formatDateTime } from '../../../utils/dateUtils';
 import AudiencePicker from './AudiencePicker';
-import ConfirmDialog from './ConfirmDialog';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import EmailPreview from './EmailPreview';
-import NewsletterStatusChip from '../shared/NewsletterStatusChip';
+import { NewsletterStatusChip } from '../shared/StatusChips';
 import RichTextEditor from '../editor/RichTextEditor';
 import SendDialog from './SendDialog';
 import SendTestDialog from './SendTestDialog';
 import {
   apiErrorMessage,
-  type DraftFields,
-  draftFieldsFrom,
   EMAIL_MAX_LENGTH,
   isValidEmail,
   normalizeEmail,
   parseEmailList,
+} from '../shared/newsletterUtils';
+import {
+  type DraftFields,
+  draftFieldsFrom,
   PREHEADER_MAX_LENGTH,
   SUBJECT_MAX_LENGTH,
   toUpdateBody,
-} from './newsletterUtils';
+} from './composerUtils';
 import { type SaveState, useNewsletterAutosave } from './useNewsletterAutosave';
 
 const HtmlEditor = lazy(() => import('../editor/HtmlEditor'));

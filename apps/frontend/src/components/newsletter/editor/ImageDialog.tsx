@@ -14,11 +14,8 @@ import {
 } from '@mui/material';
 import { Upload } from 'lucide-react';
 import { useUploadNewsletterImage } from '../../../hooks/newsletterHooks';
-import {
-  apiErrorMessage,
-  IMAGE_MAX_BYTES,
-  IMAGE_MIME_TYPES,
-} from '../composer/newsletterUtils';
+import { apiErrorMessage } from '../shared/newsletterUtils';
+import { IMAGE_MAX_BYTES, IMAGE_MIME_TYPES } from '../composer/composerUtils';
 
 export interface ImageDraft {
   /** Changes on every open, so the form starts from this draft. */

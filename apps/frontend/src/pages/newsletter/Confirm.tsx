@@ -6,14 +6,13 @@ import {
   PublicShell,
   StatePanel,
 } from '../../components/newsletter/public/PublicShell';
-import { PREVIEW_TOKEN } from '../../components/newsletter/shared/newsletterUtils';
+import {
+  PREVIEW_TOKEN,
+  throttleAwareErrorMessage,
+} from '../../components/newsletter/shared/newsletterUtils';
 import { useConfirmSubscription } from '../../hooks/newsletterHooks';
 import { usePageMeta } from '../../hooks/usePageMeta';
-import {
-  extractErrorMessage,
-  isAxiosError,
-  isThrottledError,
-} from '../../utils/errorUtils';
+import { isAxiosError } from '../../utils/errorUtils';
 
 const Confirm = () => {
   const [params] = useSearchParams();
@@ -97,9 +96,7 @@ const Confirm = () => {
             </Button>
           }
         >
-          {isThrottledError(error)
-            ? 'Too many requests right now. Wait a moment and try again.'
-            : extractErrorMessage(error)}
+          {throttleAwareErrorMessage(error)}
         </StatePanel>
       );
   } else {

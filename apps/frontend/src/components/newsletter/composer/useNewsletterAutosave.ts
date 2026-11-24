@@ -10,7 +10,8 @@ import {
   useUpdateNewsletter,
 } from '../../../hooks/newsletterHooks';
 import { isAxiosError } from '../../../utils/errorUtils';
-import { apiErrorMessage, diffUpdateBody } from './newsletterUtils';
+import { apiErrorMessage } from '../shared/newsletterUtils';
+import { diffUpdateBody } from './composerUtils';
 
 export type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 

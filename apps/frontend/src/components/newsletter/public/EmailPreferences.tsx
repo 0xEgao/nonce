@@ -24,6 +24,7 @@ import {
   isThrottledError,
 } from '../../../utils/errorUtils';
 import ConfirmDialog from '../shared/ConfirmDialog';
+import { throttleAwareErrorMessage } from '../shared/newsletterUtils';
 
 interface Props {
   /** The subscriber token from the email link: the only credential here. */
@@ -159,11 +160,7 @@ const EmailPreferences = ({ token }: Props) => {
       {notice && <Alert severity="warning">{notice}</Alert>}
       {saved && <Alert severity="success">{saved}</Alert>}
       {save.isError && (
-        <Alert severity="error">
-          {isThrottledError(save.error)
-            ? 'Too many requests right now. Wait a moment and try again.'
-            : extractErrorMessage(save.error)}
-        </Alert>
+        <Alert severity="error">{throttleAwareErrorMessage(save.error)}</Alert>
       )}
 
       {preferences.lists.length === 0 ? (

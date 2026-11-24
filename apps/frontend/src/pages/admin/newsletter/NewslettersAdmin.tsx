@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -33,16 +33,22 @@ import {
   type NewsletterSummaryResponse,
 } from '@nonce/shared';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
-import { fontFamilyMono } from '../../../components/fellowship/theme';
 import NewsletterAdminTabs from '../../../components/newsletter/shared/NewsletterAdminTabs';
-import ConfirmDialog from '../../../components/newsletter/composer/ConfirmDialog';
-import FilterPill from '../../../components/newsletter/composer/FilterPill';
-import NewsletterStatusChip from '../../../components/newsletter/shared/NewsletterStatusChip';
-import PaginationFooter from '../../../components/newsletter/composer/PaginationFooter';
+import ConfirmDialog from '../../../components/newsletter/shared/ConfirmDialog';
+import FilterPills from '../../../components/newsletter/shared/FilterPills';
+import { NewsletterStatusChip } from '../../../components/newsletter/shared/StatusChips';
+import TablePager from '../../../components/newsletter/shared/TablePager';
 import {
   apiErrorMessage,
   isPausedNow,
-} from '../../../components/newsletter/composer/newsletterUtils';
+  plural,
+} from '../../../components/newsletter/shared/newsletterUtils';
+import {
+  headCellSx,
+  monoSx,
+  tableFrameSx,
+} from '../../../components/newsletter/shared/tableStyles';
+import { usePaging } from '../../../components/newsletter/shared/usePaging';
 import {
   useCreateNewsletter,
   useDeleteNewsletter,
@@ -53,7 +59,6 @@ import { useDebounce } from '../../../hooks/useDebounce';
 import { formatDateTime } from '../../../utils/dateUtils';
 import { isBadFilterError } from '../../../utils/errorUtils';
 
-const DEFAULT_PAGE_SIZE = 25;
 // While anything on the page is sending, its counts move; refresh them.
 const SENDING_REFRESH_MS = 10000;
 
@@ -68,22 +73,13 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'Cancelled', value: NewsletterStatus.CANCELLED },
 ];
 
-const headCellSx = { py: 1.25, px: 2, letterSpacing: 0.8 };
 const cellSx = { py: 1.5, px: 2 };
-const monoSx = {
-  fontFamily: fontFamilyMono,
-  fontSize: '0.78rem',
-  color: 'text.secondary',
-  whiteSpace: 'nowrap',
-};
 const COLUMN_COUNT = 7;
 
 const NewslettersAdmin = () => {
   const navigate = useNavigate();
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [toast, setToast] = useState<{
     kind: 'success' | 'error';
     msg: string;
@@ -92,10 +88,9 @@ const NewslettersAdmin = () => {
     null
   );
   const debouncedSearch = useDebounce(search.trim(), 300);
-
-  useEffect(() => {
-    setPage(0);
-  }, [status, debouncedSearch, pageSize]);
+  const { page, pageSize, setPage, setPageSize } = usePaging(
+    `${debouncedSearch}|${status}`
+  );
 
   const { data, isLoading, isError, error } = useNewsletters(
     {
@@ -200,21 +195,11 @@ const NewslettersAdmin = () => {
         alignItems={{ xs: 'stretch', md: 'center' }}
         sx={{ mb: 2 }}
       >
-        <Stack
-          direction="row"
-          spacing={0.75}
-          flexWrap="wrap"
-          sx={{ rowGap: 1 }}
-        >
-          {STATUS_FILTERS.map(f => (
-            <FilterPill
-              key={f.value}
-              label={f.label}
-              active={status === f.value}
-              onClick={() => setStatus(f.value)}
-            />
-          ))}
-        </Stack>
+        <FilterPills<StatusFilter>
+          options={STATUS_FILTERS}
+          value={status}
+          onChange={setStatus}
+        />
         <Stack direction="row" spacing={1}>
           <TextField
             size="small"
@@ -237,14 +222,7 @@ const NewslettersAdmin = () => {
         </Stack>
       </Stack>
 
-      <Box
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <Box sx={tableFrameSx}>
         <TableContainer sx={{ overflowX: 'auto' }}>
           <Table sx={{ minWidth: 960 }}>
             <TableHead>
@@ -316,7 +294,7 @@ const NewslettersAdmin = () => {
           </Table>
         </TableContainer>
         {!isLoading && total > 0 && (
-          <PaginationFooter
+          <TablePager
             page={page}
             pageSize={pageSize}
             total={total}
@@ -563,8 +541,7 @@ const AudienceCell = ({
       )}
       {adHocCount > 0 && (
         <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary' }}>
-          + {adHocCount.toLocaleString()} address
-          {adHocCount === 1 ? '' : 'es'}
+          + {plural(adHocCount, 'address', 'addresses')}
         </Typography>
       )}
     </Box>

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { usePreviewNewsletter } from '../../../hooks/newsletterHooks';
-import { apiErrorMessage } from './newsletterUtils';
+import { apiErrorMessage } from '../shared/newsletterUtils';
 import EmailPreview from './EmailPreview';
 
 interface Props {

@@ -4,8 +4,8 @@ import {
   NewsletterStatus,
   type NewsletterSummaryResponse,
 } from '@nonce/shared';
-import NewsletterStatusChip from './NewsletterStatusChip';
-import { isPausedNow } from '../composer/newsletterUtils';
+import { NewsletterStatusChip } from './StatusChips';
+import { isPausedNow } from './newsletterUtils';
 
 /** Status, subject and the page's actions, for the read-only views. */
 const NewsletterHeader = ({

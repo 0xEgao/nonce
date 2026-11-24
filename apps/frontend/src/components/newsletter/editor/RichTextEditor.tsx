@@ -31,7 +31,7 @@ import { buildNewsletterExtensions } from './editorExtensions';
 import ImageDialog, { type ImageDraft, type ImageResult } from './ImageDialog';
 import LinkDialog, { type LinkDraft, type LinkResult } from './LinkDialog';
 import MergeTagMenu from './MergeTagMenu';
-import type { MergeTag } from '../composer/newsletterUtils';
+import type { MergeTag } from '../composer/composerUtils';
 
 // The email layout's palette (see the backend mail templates), so the editing
 // surface reads like the email it becomes. The preview pane stays the source

@@ -8,12 +8,9 @@ import {
 } from '@mui/material';
 import { useRequestPreferencesLink } from '../../../hooks/newsletterHooks';
 import { useUser } from '../../../hooks/userHooks';
-import {
-  extractErrorMessage,
-  isAxiosError,
-  isThrottledError,
-} from '../../../utils/errorUtils';
+import { isAxiosError } from '../../../utils/errorUtils';
 import { FellowshipTheme } from '../../fellowship/FellowshipTheme';
+import { throttleAwareErrorMessage } from '../shared/newsletterUtils';
 
 /**
  * The "Email preferences" card for a signed-in user's own profile page.
@@ -83,9 +80,7 @@ const EmailPreferencesSection = () => {
             )}
             {requestLink.isError && (
               <Alert severity="error">
-                {isThrottledError(requestLink.error)
-                  ? 'Too many requests right now. Wait a moment and try again.'
-                  : extractErrorMessage(requestLink.error)}
+                {throttleAwareErrorMessage(requestLink.error)}
               </Alert>
             )}
             <Button

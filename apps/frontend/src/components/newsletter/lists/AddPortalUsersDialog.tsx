@@ -25,7 +25,7 @@ import { useAddPortalUsersToMailingList } from '../../../hooks/newsletterHooks';
 import { cohortTypeToName } from '../../../helpers/cohortHelpers';
 import { extractErrorMessage } from '../../../utils/errorUtils';
 import AddSubscribersCounts from './AddSubscribersCounts';
-import { PORTAL_AUDIENCE_LABELS } from '../shared/newsletterUtils';
+import { PORTAL_AUDIENCE_LABELS, plural } from '../shared/newsletterUtils';
 
 const AUDIENCES = Object.values(PortalAudience);
 const COHORT_TYPES = Object.values(CohortType);
@@ -271,9 +271,7 @@ const AddPortalUsersDialog = ({ listId, listName, onClose }: Props) => {
               >
                 {currentPreview.added === 0
                   ? 'Nobody to add'
-                  : `Add ${currentPreview.added.toLocaleString()} ${
-                      currentPreview.added === 1 ? 'user' : 'users'
-                    }`}
+                  : `Add ${plural(currentPreview.added, 'user')}`}
               </Button>
             ) : (
               <Button

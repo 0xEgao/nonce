@@ -5,7 +5,7 @@ import { Box, CircularProgress, Typography } from '@mui/material';
 import '../../assignment/monacoSetup.ts';
 import { fontFamilyMono } from '../../fellowship/theme';
 import MergeTagMenu from './MergeTagMenu';
-import type { MergeTag } from '../composer/newsletterUtils';
+import type { MergeTag } from '../composer/composerUtils';
 
 type CodeEditor = Parameters<OnMount>[0];
 

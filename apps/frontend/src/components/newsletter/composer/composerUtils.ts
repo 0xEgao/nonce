@@ -1,23 +1,13 @@
-import {
-  type NewsletterDetailResponse,
-  NewsletterStatus,
-  type UpdateNewsletterRequest,
+import type {
+  NewsletterDetailResponse,
+  UpdateNewsletterRequest,
 } from '@nonce/shared';
-import { extractErrorMessage, isAxiosError } from '../../../utils/errorUtils';
+import {
+  isValidEmail,
+  normalizeEmail,
+  parseEmailList,
+} from '../shared/newsletterUtils';
 
-/**
- * extractErrorMessage, plus the ValidationPipe shape: a 400 from a DTO check
- * carries `message` as an array of strings, one per failed constraint.
- */
-export const apiErrorMessage = (error: unknown): string => {
-  if (isAxiosError(error)) {
-    const data = error.response?.data as { message?: unknown } | undefined;
-    if (Array.isArray(data?.message)) return data.message.join('. ');
-  }
-  return extractErrorMessage(error);
-};
-
-export const EMAIL_MAX_LENGTH = 320;
 export const SUBJECT_MAX_LENGTH = 255;
 export const PREHEADER_MAX_LENGTH = 255;
 export const MAX_TEST_RECIPIENTS = 10;
@@ -28,43 +18,6 @@ export const IMAGE_MIME_TYPES = [
   'image/gif',
   'image/webp',
 ];
-
-// Close to what the API's @IsEmail() accepts (validator.js defaults): dotted
-// atoms before the @, hyphenated labels after it, an alphabetic TLD. The
-// server stays the authority; this only catches typos before a round trip.
-const EMAIL_PATTERN =
-  /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,}|xn--[a-z0-9-]+)$/i;
-
-/** The form the API stores and compares addresses in. */
-export const normalizeEmail = (email: string): string =>
-  email.trim().toLowerCase();
-
-export const isValidEmail = (email: string): boolean =>
-  email.length <= EMAIL_MAX_LENGTH && EMAIL_PATTERN.test(email);
-
-export interface ParsedEmailList {
-  /** Normalized, deduplicated, well-formed. */
-  valid: string[];
-  /** Normalized, deduplicated, malformed. */
-  invalid: string[];
-}
-
-/**
- * Splits pasted text on commas, semicolons and whitespace. Angle brackets and
- * quotes around an address are dropped, so a copied `<a@b.co>` still counts.
- */
-export const parseEmailList = (text: string): ParsedEmailList => {
-  const seen = new Set<string>();
-  const valid: string[] = [];
-  const invalid: string[] = [];
-  for (const raw of text.split(/[\s,;]+/)) {
-    const email = normalizeEmail(raw.replace(/^[<"'(]+|[>"')]+$/g, ''));
-    if (!email || seen.has(email)) continue;
-    seen.add(email);
-    (isValidEmail(email) ? valid : invalid).push(email);
-  }
-  return { valid, invalid };
-};
 
 // ---- merge tags ----
 
@@ -163,18 +116,7 @@ export const diffUpdateBody = (
     : null;
 };
 
-// ---- status ----
-
-export const NEWSLETTER_STATUS_LABELS: Record<NewsletterStatus, string> = {
-  [NewsletterStatus.DRAFT]: 'Draft',
-  [NewsletterStatus.SCHEDULED]: 'Scheduled',
-  [NewsletterStatus.SENDING]: 'Sending',
-  [NewsletterStatus.SENT]: 'Sent',
-  [NewsletterStatus.CANCELLED]: 'Cancelled',
-};
-
-export const isPausedNow = (pausedUntil: string | null): boolean =>
-  !!pausedUntil && new Date(pausedUntil).getTime() > Date.now();
+// ---- audience ----
 
 /** "Weekly digest, Fellows + 3 addresses" */
 export const describeAudience = (
@@ -187,6 +129,3 @@ export const describeAudience = (
   }
   return parts.length > 0 ? parts.join(', ') : 'No audience yet';
 };
-
-export const plural = (n: number, one: string, many = `${one}s`) =>
-  `${n.toLocaleString()} ${n === 1 ? one : many}`;

@@ -16,7 +16,7 @@ import {
   apiErrorMessage,
   type ParsedEmailList,
   plural,
-} from './newsletterUtils';
+} from '../shared/newsletterUtils';
 
 interface Props {
   listIds: string[];

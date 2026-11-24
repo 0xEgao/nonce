@@ -20,6 +20,7 @@ import { useAddMailingListSubscribers } from '../../../hooks/newsletterHooks';
 import { extractErrorMessage } from '../../../utils/errorUtils';
 import { fontFamilyMono } from '../../fellowship/theme';
 import AddSubscribersCounts from './AddSubscribersCounts';
+import { plural } from '../shared/newsletterUtils';
 import {
   MAX_IMPORT_SUBSCRIBERS,
   csvToSubscriberLines,
@@ -226,8 +227,7 @@ const AddSubscribersDialog = ({ listId, listName, onClose }: Props) => {
                       component="span"
                       sx={{ fontSize: 'inherit', color: 'text.secondary' }}
                     >
-                      {parsed.duplicates.toLocaleString()} duplicate
-                      {parsed.duplicates === 1 ? '' : 's'} ignored
+                      {plural(parsed.duplicates, 'duplicate')} ignored
                     </Typography>
                   )}
                 </Stack>
@@ -306,9 +306,7 @@ const AddSubscribersDialog = ({ listId, listName, onClose }: Props) => {
               }
             >
               {parsed.entries.length > 0
-                ? `Add ${parsed.entries.length.toLocaleString()} ${
-                    parsed.entries.length === 1 ? 'person' : 'people'
-                  }`
+                ? `Add ${plural(parsed.entries.length, 'person', 'people')}`
                 : 'Add people'}
             </Button>
           </>

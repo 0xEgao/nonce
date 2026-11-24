@@ -20,10 +20,10 @@ import { useUser } from '../../../hooks/userHooks';
 import { fontFamilyMono } from '../../fellowship/theme';
 import {
   apiErrorMessage,
-  MAX_TEST_RECIPIENTS,
   parseEmailList,
   plural,
-} from './newsletterUtils';
+} from '../shared/newsletterUtils';
+import { MAX_TEST_RECIPIENTS } from './composerUtils';
 
 interface Props {
   open: boolean;

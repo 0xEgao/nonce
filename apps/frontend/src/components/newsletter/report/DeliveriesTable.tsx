@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -24,12 +24,13 @@ import { useDebounce } from '../../../hooks/useDebounce';
 import { formatDateTime } from '../../../utils/dateUtils';
 import { isBadFilterError } from '../../../utils/errorUtils';
 import { fontFamilyMono } from '../../fellowship/theme';
-import FilterPill from '../composer/FilterPill';
-import NewsletterStatusChip from '../shared/NewsletterStatusChip';
-import { apiErrorMessage } from '../composer/newsletterUtils';
-import PaginationFooter from '../composer/PaginationFooter';
+import FilterPills from '../shared/FilterPills';
+import { NewsletterStatusChip } from '../shared/StatusChips';
+import TablePager from '../shared/TablePager';
+import { apiErrorMessage } from '../shared/newsletterUtils';
+import { headCellSx, monoSx, tableFrameSx } from '../shared/tableStyles';
+import { usePaging } from '../shared/usePaging';
 
-const DEFAULT_PAGE_SIZE = 25;
 const LIVE_REFRESH_MS = 5000;
 
 type StatusFilter = NewsletterDeliveryStatus | 'ALL';
@@ -43,14 +44,7 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'Skipped', value: NewsletterDeliveryStatus.SKIPPED },
 ];
 
-const headCellSx = { py: 1.25, px: 2, letterSpacing: 0.8 };
 const cellSx = { py: 1.25, px: 2 };
-const monoSx = {
-  fontFamily: fontFamilyMono,
-  fontSize: '0.78rem',
-  color: 'text.secondary',
-  whiteSpace: 'nowrap',
-};
 
 interface Props {
   newsletterId: string;
@@ -62,13 +56,10 @@ interface Props {
 const DeliveriesTable = ({ newsletterId, trackingEnabled, live }: Props) => {
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const debouncedSearch = useDebounce(search.trim(), 300);
-
-  useEffect(() => {
-    setPage(0);
-  }, [status, debouncedSearch, pageSize]);
+  const { page, pageSize, setPage, setPageSize } = usePaging(
+    `${debouncedSearch}|${status}`
+  );
 
   const { data, isLoading, isError, error } = useNewsletterDeliveries(
     {
@@ -100,21 +91,11 @@ const DeliveriesTable = ({ newsletterId, trackingEnabled, live }: Props) => {
         alignItems={{ xs: 'stretch', md: 'center' }}
         sx={{ mb: 1.5 }}
       >
-        <Stack
-          direction="row"
-          spacing={0.75}
-          flexWrap="wrap"
-          sx={{ rowGap: 1 }}
-        >
-          {STATUS_FILTERS.map(f => (
-            <FilterPill
-              key={f.value}
-              label={f.label}
-              active={status === f.value}
-              onClick={() => setStatus(f.value)}
-            />
-          ))}
-        </Stack>
+        <FilterPills<StatusFilter>
+          options={STATUS_FILTERS}
+          value={status}
+          onChange={setStatus}
+        />
         <TextField
           size="small"
           value={search}
@@ -143,14 +124,7 @@ const DeliveriesTable = ({ newsletterId, trackingEnabled, live }: Props) => {
         </Alert>
       )}
 
-      <Box
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <Box sx={tableFrameSx}>
         <TableContainer sx={{ overflowX: 'auto' }}>
           <Table size="small" sx={{ minWidth: trackingEnabled ? 900 : 720 }}>
             <TableHead>
@@ -211,7 +185,7 @@ const DeliveriesTable = ({ newsletterId, trackingEnabled, live }: Props) => {
           </Table>
         </TableContainer>
         {!isLoading && total > 0 && (
-          <PaginationFooter
+          <TablePager
             page={page}
             pageSize={pageSize}
             total={total}

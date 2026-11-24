@@ -38,6 +38,10 @@ import {
   ListVisibilityChip,
 } from '../../../components/newsletter/shared/StatusChips';
 import ToastSnackbar from '../../../components/newsletter/shared/ToastSnackbar';
+import {
+  monoSx,
+  tableFrameSx,
+} from '../../../components/newsletter/shared/tableStyles';
 import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
 import {
@@ -230,14 +234,7 @@ const MailingListsAdmin = () => {
         </Button>
       </Stack>
 
-      <TableContainer
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <TableContainer sx={tableFrameSx}>
         <Table size="small" sx={{ minWidth: 880 }}>
           <TableHead>
             <TableRow>
@@ -304,14 +301,7 @@ const MailingListsAdmin = () => {
                   <TableCell align="right">
                     <Count value={list.unsubscribedCount} />
                   </TableCell>
-                  <TableCell
-                    sx={{
-                      fontFamily: fontFamilyMono,
-                      fontSize: '0.78rem',
-                      color: 'text.secondary',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <TableCell sx={monoSx}>
                     {formatCohortDate(list.createdAt)}
                   </TableCell>
                   <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>

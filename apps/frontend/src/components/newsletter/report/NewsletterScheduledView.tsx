@@ -8,9 +8,10 @@ import {
   useUnscheduleNewsletter,
 } from '../../../hooks/newsletterHooks';
 import { formatDateTime } from '../../../utils/dateUtils';
-import ConfirmDialog from '../composer/ConfirmDialog';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import NewsletterHeader, { DetailRow } from '../shared/NewsletterHeader';
-import { apiErrorMessage, describeAudience } from '../composer/newsletterUtils';
+import { apiErrorMessage } from '../shared/newsletterUtils';
+import { describeAudience } from '../composer/composerUtils';
 import StoredPreview from '../composer/StoredPreview';
 
 interface Props {

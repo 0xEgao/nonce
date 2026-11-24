@@ -17,15 +17,15 @@ import {
 } from '../../../hooks/newsletterHooks';
 import { formatDateTime } from '../../../utils/dateUtils';
 import { fontFamilyMono } from '../../fellowship/theme';
-import ConfirmDialog from '../composer/ConfirmDialog';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import DeliveriesTable from './DeliveriesTable';
 import NewsletterHeader, { DetailRow } from '../shared/NewsletterHeader';
 import {
   apiErrorMessage,
-  describeAudience,
   isPausedNow,
   plural,
-} from '../composer/newsletterUtils';
+} from '../shared/newsletterUtils';
+import { describeAudience } from '../composer/composerUtils';
 import StoredPreview from '../composer/StoredPreview';
 
 interface Props {

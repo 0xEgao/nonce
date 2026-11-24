@@ -31,6 +31,11 @@ import NewsletterAdminTabs from '../../../components/newsletter/shared/Newslette
 import { SubscriberStatusChip } from '../../../components/newsletter/shared/StatusChips';
 import TablePager from '../../../components/newsletter/shared/TablePager';
 import ToastSnackbar from '../../../components/newsletter/shared/ToastSnackbar';
+import { plural } from '../../../components/newsletter/shared/newsletterUtils';
+import {
+  monoSx,
+  tableFrameSx,
+} from '../../../components/newsletter/shared/tableStyles';
 import { usePaging } from '../../../components/newsletter/shared/usePaging';
 import { useToast } from '../../../components/newsletter/shared/useToast';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
@@ -189,14 +194,7 @@ const SubscribersAdmin = () => {
         />
       </Stack>
 
-      <TableContainer
-        sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 0.75,
-          bgcolor: 'background.paper',
-        }}
-      >
+      <TableContainer sx={tableFrameSx}>
         <Table size="small" sx={{ minWidth: 820 }}>
           <TableHead>
             <TableRow>
@@ -276,14 +274,7 @@ const SubscribersAdmin = () => {
                   >
                     {row.listCount.toLocaleString()}
                   </TableCell>
-                  <TableCell
-                    sx={{
-                      fontFamily: fontFamilyMono,
-                      fontSize: '0.78rem',
-                      color: 'text.secondary',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
+                  <TableCell sx={monoSx}>
                     {formatCohortDate(row.createdAt)}
                   </TableCell>
                   <TableCell align="right">
@@ -381,9 +372,7 @@ const SubscribersAdmin = () => {
             This erases <strong>{deleting.email}</strong> and their
             subscriptions on every list
             {deleting.listCount > 0 &&
-              ` (${deleting.listCount.toLocaleString()} ${
-                deleting.listCount === 1 ? 'list' : 'lists'
-              })`}
+              ` (${plural(deleting.listCount, 'list')})`}
             . It cannot be undone.
           </Box>
           <Box component="p" sx={{ mb: 0 }}>

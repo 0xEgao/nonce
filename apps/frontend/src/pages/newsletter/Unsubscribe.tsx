@@ -6,17 +6,16 @@ import {
   PublicShell,
   StatePanel,
 } from '../../components/newsletter/public/PublicShell';
-import { PREVIEW_TOKEN } from '../../components/newsletter/shared/newsletterUtils';
+import {
+  PREVIEW_TOKEN,
+  throttleAwareErrorMessage,
+} from '../../components/newsletter/shared/newsletterUtils';
 import {
   usePreferencesByToken,
   useUnsubscribe,
 } from '../../hooks/newsletterHooks';
 import { usePageMeta } from '../../hooks/usePageMeta';
-import {
-  extractErrorMessage,
-  isAxiosError,
-  isThrottledError,
-} from '../../utils/errorUtils';
+import { isAxiosError } from '../../utils/errorUtils';
 
 type Choice = 'newsletter' | 'all';
 
@@ -134,9 +133,7 @@ const Unsubscribe = () => {
             </Button>
           }
         >
-          {isThrottledError(preferences.error)
-            ? 'Too many requests right now. Wait a moment and try again.'
-            : extractErrorMessage(preferences.error)}
+          {throttleAwareErrorMessage(preferences.error)}
         </StatePanel>
       );
   } else {
@@ -165,9 +162,7 @@ const Unsubscribe = () => {
 
         {unsubscribe.isError && (
           <Alert severity="error">
-            {isThrottledError(unsubscribe.error)
-              ? 'Too many requests right now. Wait a moment and try again.'
-              : extractErrorMessage(unsubscribe.error)}
+            {throttleAwareErrorMessage(unsubscribe.error)}
           </Alert>
         )}
 
