@@ -106,19 +106,15 @@ class DiscordRolesConfig {
     alumniBuildingBitcoinInRust: string;
 
     // Fellow roles, one per FellowshipType, granted once a contract starts and
-    // removed when it ends, by the daily fellowship job. Optional so a deploy
-    // whose config predates them still boots; an unset role is not synced.
-    @IsOptional()
+    // removed when it ends, by the daily fellowship job.
     @IsNumberString({ no_symbols: true })
-    devFellow?: string;
+    devFellow: string;
 
-    @IsOptional()
     @IsNumberString({ no_symbols: true })
-    eduFellow?: string;
+    eduFellow: string;
 
-    @IsOptional()
     @IsNumberString({ no_symbols: true })
-    designFellow?: string;
+    designFellow: string;
 }
 
 class DiscordInviteUrlsConfig {

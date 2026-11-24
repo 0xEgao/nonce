@@ -38,11 +38,10 @@ discord:
     alumniBitcoinProtocolDevelopment: '1272443289064312892'
     alumniMasteringLightningNetwork: '1474033277546270770'
     alumniBuildingBitcoinInRust: '1529406139467300916'
-    # Fellow roles (dev-fellow, edu-fellows, design-fellow). Left null (~), a
-    # role is not synced. Set the real role IDs to enable the daily sync.
-    devFellow: ~
-    eduFellow: ~
-    designFellow: ~
+    # Fellow roles (dev-fellow, edu-fellows, design-fellow), synced daily.
+    devFellow: '1290713436359229516'
+    eduFellow: '1423571856023097374'
+    designFellow: '1423535986322964570'
   inviteUrls:
     masteringBitcoin: https://discord.gg/PRYytp69TG
     learningBitcoinFromCommandLine: https://discord.gg/FCH4dCwyEk

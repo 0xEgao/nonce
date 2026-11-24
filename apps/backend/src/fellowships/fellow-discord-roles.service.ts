@@ -48,7 +48,7 @@ interface RolePlan {
 @Injectable()
 export class FellowDiscordRolesService {
     private readonly logger = new Logger(FellowDiscordRolesService.name);
-    private readonly roleIdByType: Partial<Record<FellowshipType, string>>;
+    private readonly roleIdByType: Record<FellowshipType, string>;
 
     constructor(
         @InjectRepository(Fellowship)
@@ -56,15 +56,13 @@ export class FellowDiscordRolesService {
         private readonly discordClient: DiscordClient,
         configService: ConfigService,
     ) {
-        this.roleIdByType = {};
-        for (const type of Object.values(FellowshipType)) {
-            const roleId = configService.get<string>(
-                FELLOW_ROLE_CONFIG_KEYS[type],
-            );
-            if (roleId) {
-                this.roleIdByType[type] = roleId;
-            }
-        }
+        const roleId = (type: FellowshipType) =>
+            configService.getOrThrow<string>(FELLOW_ROLE_CONFIG_KEYS[type]);
+        this.roleIdByType = {
+            [FellowshipType.DEVELOPER]: roleId(FellowshipType.DEVELOPER),
+            [FellowshipType.EDUCATOR]: roleId(FellowshipType.EDUCATOR),
+            [FellowshipType.DESIGNER]: roleId(FellowshipType.DESIGNER),
+        };
     }
 
     async syncFellowRoles(
@@ -76,20 +74,6 @@ export class FellowDiscordRolesService {
             failed: 0,
             notInGuild: 0,
         };
-
-        const unconfigured = Object.values(FellowshipType).filter(
-            (type) => !this.roleIdByType[type],
-        );
-        if (unconfigured.length > 0) {
-            this.logger.warn(
-                `No Discord fellow role configured for ${unconfigured.join(', ')}; not syncing ${
-                    unconfigured.length === 1 ? 'it' : 'them'
-                }`,
-            );
-        }
-        if (unconfigured.length === Object.values(FellowshipType).length) {
-            return result;
-        }
 
         const plans = await this.planRoles(now);
 
@@ -139,7 +123,6 @@ export class FellowDiscordRolesService {
         const plans = new Map<string, RolePlan>();
         for (const fellowship of fellowships) {
             const roleId = this.roleIdByType[fellowship.type];
-            if (!roleId) continue;
 
             const discordUserId = fellowship.user.discordUserId;
             let plan = plans.get(discordUserId);

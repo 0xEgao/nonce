@@ -52,11 +52,13 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
     // Discord user id -> roles they hold. Absent means not in the guild.
     let guild: Record<string, string[]>;
 
-    const build = (roles: Record<string, string> = ALL_ROLES) =>
+    const build = () =>
         new FellowDiscordRolesService(
             fellowshipRepository as unknown as Repository<Fellowship>,
             discordClient as unknown as DiscordClient,
-            { get: (key: string) => roles[key] } as unknown as ConfigService,
+            {
+                getOrThrow: (key: string) => ALL_ROLES[key],
+            } as unknown as ConfigService,
         );
 
     beforeEach(() => {
@@ -202,39 +204,6 @@ describe('FellowDiscordRolesService.syncFellowRoles', () => {
 
         expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
         expect(discordClient.attachRoleToMember).not.toHaveBeenCalled();
-        expect(result).toEqual({
-            granted: 0,
-            removed: 0,
-            failed: 0,
-            notInGuild: 0,
-        });
-    });
-
-    it('leaves an unconfigured role alone', async () => {
-        fellowshipRepository.find.mockResolvedValue([
-            active(FellowshipType.DESIGNER, 'design'),
-            completed(FellowshipType.DEVELOPER, 'ex-dev'),
-        ]);
-        guild = { design: [], 'ex-dev': [DEV_ROLE] };
-
-        const result = await build({
-            'discord.roles.designFellow': DESIGN_ROLE,
-        }).syncFellowRoles(NOW);
-
-        // Designer set: granted. Developer unset: ex-dev not even looked up.
-        expect(discordClient.attachRoleToMember.mock.calls).toEqual([
-            ['design', DESIGN_ROLE],
-        ]);
-        expect(discordClient.findGuildMember).toHaveBeenCalledTimes(1);
-        expect(discordClient.removeRoleFromMember).not.toHaveBeenCalled();
-        expect(result.granted).toBe(1);
-    });
-
-    it('does nothing, not even reading the database, when no fellow role is configured', async () => {
-        const result = await build({}).syncFellowRoles(NOW);
-
-        expect(fellowshipRepository.find).not.toHaveBeenCalled();
-        expect(discordClient.findGuildMember).not.toHaveBeenCalled();
         expect(result).toEqual({
             granted: 0,
             removed: 0,
