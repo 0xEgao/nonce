@@ -93,13 +93,16 @@ suite's `grade.sh` carries only what is distinctive about it. The pb weeks are a
 driven by `lib/pb_grade.py`, so each of those is the same three lines over a different
 `checks.json`.
 
-The BBR suites share the `0xEgao/rust-lang-cohort-assignments` starter workspace.
-Enable its GitHub template setting before provisioning student repositories.
-Each suite stages `weeks/week-NN/src/` from the submission into a standalone crate
-with the grader's copy of that week's manifest, lockfile, and integration tests.
-The BBR fixtures were imported from commit `9b2f6a1` of the starter repository.
-To update dependencies, copy the updated workspace lockfile into the standalone
-crate and run `cargo tree` there to resolve it for that week's manifest.
+Each BBR week uses `Bitshala-Classrooms/RUST-week-N-assignment`. The suite stages
+the submission's `src/` alongside the manifest, lockfile, and integration test in
+its own `crate/` directory. Grading checks the results against `test-names.txt`.
+
+Refresh the grader's copy from a trusted checkout of the weekly template. Add
+`--check` to compare the copies and test names without updating them.
+
+```shell
+bash grader/tools/sync-bbr-fixtures.sh 7 ~/RUST-week-7-assignment
+```
 
 The bpd capstone has no suite: it is a README with no tests and wants manual grading.
 
@@ -117,6 +120,7 @@ which fixes the credentials and ports the assertions assume.
 
 For `pb-*`, where the book puts each `TestCase` in the same file as the function it
 tests, `fixtures/` carries a separate module of authoritative assertions instead.
+The BBR suites stage a standalone crate from `crate/`.
 
 ### Pinned data
 
@@ -215,11 +219,10 @@ that is genuinely self-contained. Two things make it sharper than it looks:
 
 **It does** guarantee students cannot *modify* the tests. The suite lives here, students
 have no access to this repository, the commit endpoint refuses to write the harness
-paths, and `restore_fixtures` overwrites them anyway — which is what makes a passing
-score mean something.
+paths, and the grader uses its own copy of the tests.
 
-The public starter repositories ship their tests so students can run them locally.
-The private grader repo protects `APP_KEY`.
+**It does not** hide the tests. The public starter repositories ship them so students
+can run them locally. The private grader repo protects `APP_KEY`.
 
 Even for an assignment whose tests were only here, student code executes in the same job
 as the test files, so a determined student could print them to the run log.
