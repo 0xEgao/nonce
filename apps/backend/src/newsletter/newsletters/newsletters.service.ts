@@ -460,7 +460,7 @@ export class NewslettersService {
             );
             if (!retried) {
                 throw new BadRequestException(
-                    'No failed deliveries to retry. Bounced and unsubscribed addresses are not retried.',
+                    "No failed deliveries can be retried: addresses that bounced, unsubscribed, left this newsletter's lists or were deleted are left out.",
                 );
             }
 

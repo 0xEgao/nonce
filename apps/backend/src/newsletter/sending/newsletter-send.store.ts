@@ -84,6 +84,18 @@ export const DELIVERY_STILL_WANTED_SQL = `
     )`;
 
 /**
+ * SQL expression: why delivery `d` is no longer wanted, for its "error"
+ * column. Meant for rows DELIVERY_STILL_WANTED_SQL has just rejected.
+ */
+export const SUPPRESSED_REASON_SQL = `
+    CASE (SELECT s."status" FROM "subscriber" AS s WHERE s."id" = d."subscriberId")
+        WHEN '${SubscriberStatus.BOUNCED}' THEN 'Bounced before this newsletter reached them'
+        WHEN '${SubscriberStatus.UNSUBSCRIBED}' THEN 'Unsubscribed before this newsletter reached them'
+        WHEN '${SubscriberStatus.ACTIVE}' THEN 'Unsubscribed from the lists before this newsletter reached them'
+        ELSE 'Address erased before this newsletter reached them'
+    END`;
+
+/**
  * Every database step of sending, each one safe to run concurrently with
  * itself, with cancellation, and with the stall-recovery cron. Kept apart
  * from NewsletterSendService so the send loop can be tested against an
@@ -205,12 +217,7 @@ export class NewsletterSendStore {
             UPDATE "newsletter_delivery" AS d
             SET "status" = '${D.SKIPPED}',
                 "claimedAt" = NULL,
-                "error" = CASE (SELECT s."status" FROM "subscriber" AS s WHERE s."id" = d."subscriberId")
-                    WHEN '${SubscriberStatus.BOUNCED}' THEN 'Bounced before this newsletter reached them'
-                    WHEN '${SubscriberStatus.UNSUBSCRIBED}' THEN 'Unsubscribed before this newsletter reached them'
-                    WHEN '${SubscriberStatus.ACTIVE}' THEN 'Unsubscribed from the lists before this newsletter reached them'
-                    ELSE 'Address erased before this newsletter reached them'
-                END
+                "error" = ${SUPPRESSED_REASON_SQL}
             WHERE d."newsletterId" = $1
               AND d."status" = '${D.PENDING}'
               AND NOT (${DELIVERY_STILL_WANTED_SQL})
@@ -353,6 +360,35 @@ export class NewsletterSendStore {
                   AND (n."pausedUntil" IS NULL OR n."pausedUntil" <= $4)
                 `,
                 [newsletterId, deliveryId, claimedAt, touchedAt],
+            );
+        return affected > 0;
+    }
+
+    /**
+     * A claimed row whose recipient no longer wants it becomes SKIPPED. True
+     * if it was skipped. skipSuppressed only runs before a batch is claimed,
+     * and an unsubscribe, a removal from the lists, an erasure or another
+     * newsletter's bounce can land while the batch is still sending.
+     */
+    async skipIfUnwanted(
+        newsletterId: string,
+        deliveryId: string,
+        claimedAt: Date,
+    ): Promise<boolean> {
+        const [, affected]: [unknown, number] =
+            await this.deliveryRepository.query(
+                `
+                UPDATE "newsletter_delivery" AS d
+                SET "status" = '${D.SKIPPED}',
+                    "claimedAt" = NULL,
+                    "error" = ${SUPPRESSED_REASON_SQL}
+                WHERE d."id" = $2
+                  AND d."newsletterId" = $1
+                  AND d."status" = '${D.SENDING}'
+                  AND d."claimedAt" = $3
+                  AND NOT (${DELIVERY_STILL_WANTED_SQL})
+                `,
+                [newsletterId, deliveryId, claimedAt],
             );
         return affected > 0;
     }

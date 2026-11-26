@@ -110,6 +110,15 @@ class FakeStore {
         this.subscribedLists.get(subscriberId)?.delete(listId);
     }
 
+    /** Erasure: the FK's ON DELETE SET NULL clears it off its deliveries. */
+    deleteSubscriber(subscriberId: string): void {
+        this.subscribers.delete(subscriberId);
+        this.subscribedLists.delete(subscriberId);
+        for (const row of this.rows) {
+            if (row.subscriberId === subscriberId) row.subscriberId = null;
+        }
+    }
+
     /** What NewslettersService.cancel does. */
     cancel(): void {
         this.newsletter.status = NewsletterStatus.CANCELLED;
@@ -177,15 +186,11 @@ class FakeStore {
     async skipSuppressed(): Promise<void> {
         for (const row of this.rows) {
             if (row.status !== D.PENDING || this.stillWanted(row)) continue;
-            const subscriber = row.subscriberId
-                ? this.subscribers.get(row.subscriberId)
-                : undefined;
-            row.status = D.SKIPPED;
-            row.error = subscriber
-                ? subscriber.status === SubscriberStatus.ACTIVE
-                    ? 'off the lists'
-                    : `${subscriber.status}`
-                : 'erased';
+            Object.assign(row, {
+                status: D.SKIPPED,
+                claimedAt: null,
+                error: this.suppressedReason(row),
+            });
         }
     }
 
@@ -263,6 +268,23 @@ class FakeStore {
             return false;
         }
         row.claimedAt = touchedAt;
+        return true;
+    }
+
+    async skipIfUnwanted(
+        _id: string,
+        deliveryId: string,
+        claimedAt: Date,
+    ): Promise<boolean> {
+        const row = this.byId(deliveryId);
+        if (!this.heldUnder(row, claimedAt) || this.stillWanted(row)) {
+            return false;
+        }
+        Object.assign(row, {
+            status: D.SKIPPED,
+            claimedAt: null,
+            error: this.suppressedReason(row),
+        });
         return true;
     }
 
@@ -420,6 +442,17 @@ class FakeStore {
                 (email) => email.toLowerCase() === row.email.toLowerCase(),
             )
         );
+    }
+
+    /** SUPPRESSED_REASON_SQL, abbreviated. */
+    private suppressedReason(row: Row): string {
+        const subscriber = row.subscriberId
+            ? this.subscribers.get(row.subscriberId)
+            : undefined;
+        if (!subscriber) return 'erased';
+        return subscriber.status === SubscriberStatus.ACTIVE
+            ? 'off the lists'
+            : subscriber.status;
     }
 
     private heldUnder(row: Row, claimedAt: Date): boolean {
@@ -1052,6 +1085,181 @@ describe('NewsletterSendService', () => {
             error: SubscriberStatus.UNSUBSCRIBED,
         });
         expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+    });
+
+    describe('when a recipient stops wanting it after the claim', () => {
+        beforeEach(() => {
+            jest.useFakeTimers({
+                doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate'],
+            });
+            // Waiting between emails moves the clock on, as it does for
+            // real, so every row after the first is reconfirmed under a later
+            // time than the batch's claim. A check made under the original
+            // claim time would then find nothing and let the email go out.
+            service.sleep = async (ms) => {
+                jest.setSystemTime(Date.now() + ms);
+            };
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        /** Runs `change` while the email to `to` is on the wire. */
+        function whileSending(to: string, change: () => void): void {
+            mailer.send.mockImplementation(async (message: { to: string }) => {
+                if (message.to === to) change();
+            });
+        }
+
+        function mailedTo(email: string): boolean {
+            return mailer.send.mock.calls.some(([m]) => m.to === email);
+        }
+
+        it('skips a recipient who unsubscribes from everything mid-batch', async () => {
+            audience(3);
+            whileSending('a0@x.test', () =>
+                store.setSubscriberStatus('s-1', SubscriberStatus.UNSUBSCRIBED),
+            );
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailedTo('a1@x.test')).toBe(false);
+            expect(mailer.send).toHaveBeenCalledTimes(2);
+            expect(store.row('a1@x.test')).toMatchObject({
+                status: D.SKIPPED,
+                claimedAt: null,
+                attempts: 0,
+                error: SubscriberStatus.UNSUBSCRIBED,
+            });
+            expect(store.status('a0@x.test')).toBe(D.SENT);
+            expect(store.status('a2@x.test')).toBe(D.SENT);
+            // Finished in this run: nothing left behind for a later one.
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+            expect(store.tasks).toEqual([]);
+        });
+
+        it("skips a recipient who leaves the newsletter's lists mid-batch", async () => {
+            audience(3);
+            // Still ACTIVE globally: they only left this list.
+            whileSending('a0@x.test', () => store.unsubscribe('s-1', 'list-1'));
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailedTo('a1@x.test')).toBe(false);
+            expect(store.row('a1@x.test')).toMatchObject({
+                status: D.SKIPPED,
+                error: 'off the lists',
+            });
+            expect(store.status('a2@x.test')).toBe(D.SENT);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+        });
+
+        it('skips a recipient deleted mid-batch', async () => {
+            audience(3);
+            whileSending('a0@x.test', () => store.deleteSubscriber('s-1'));
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailedTo('a1@x.test')).toBe(false);
+            expect(store.row('a1@x.test')).toMatchObject({
+                status: D.SKIPPED,
+                subscriberId: null,
+                error: 'erased',
+            });
+            expect(store.status('a2@x.test')).toBe(D.SENT);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+        });
+
+        it('skips a recipient bounced by another newsletter mid-batch', async () => {
+            audience(3);
+            whileSending('a0@x.test', () =>
+                store.setSubscriberStatus('s-1', SubscriberStatus.BOUNCED),
+            );
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailedTo('a1@x.test')).toBe(false);
+            expect(store.row('a1@x.test')).toMatchObject({
+                status: D.SKIPPED,
+                attempts: 0,
+                error: SubscriberStatus.BOUNCED,
+            });
+            expect(subscriptionService.markBounced).not.toHaveBeenCalled();
+            expect(store.status('a2@x.test')).toBe(D.SENT);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+        });
+
+        it('still sends to a recipient on another of its lists, and to an ad-hoc one', async () => {
+            store.newsletter = makeNewsletter({
+                lists: [
+                    { id: 'list-1', slug: 'updates', name: 'Updates' },
+                    { id: 'list-2', slug: 'events', name: 'Events' },
+                ] as Newsletter['lists'],
+                adHocEmails: ['Guest@X.test'],
+            });
+            audience(
+                2,
+                [],
+                [
+                    {
+                        subscriberId: 's-guest',
+                        email: 'guest@x.test',
+                        name: 'Guest',
+                    },
+                ],
+            );
+            store.subscribe('s-1', 'list-2');
+            whileSending('a0@x.test', () => store.unsubscribe('s-1', 'list-1'));
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailer.send).toHaveBeenCalledTimes(3);
+            expect(store.status('a1@x.test')).toBe(D.SENT);
+            expect(store.status('guest@x.test')).toBe(D.SENT);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+        });
+
+        it('leaves nothing in flight, so the next run claims at once', async () => {
+            audience(30);
+            whileSending('a0@x.test', () =>
+                store.setSubscriberStatus('s-1', SubscriberStatus.UNSUBSCRIBED),
+            );
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailer.send).toHaveBeenCalledTimes(24);
+            expect(store.row('a1@x.test')).toMatchObject({
+                status: D.SKIPPED,
+                claimedAt: null,
+            });
+            expect(store.rows.some((r) => r.status === D.SENDING)).toBe(false);
+            expect(store.tasks).toHaveLength(1);
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailer.send).toHaveBeenCalledTimes(29);
+            expect(mailedTo('a1@x.test')).toBe(false);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+        });
+
+        it('completes a batch whose every recipient left after the claim, sending nothing', async () => {
+            audience(2);
+            const claimBatch = store.claimBatch.bind(store);
+            store.claimBatch = async (...args) => {
+                const batch = await claimBatch(...args);
+                store.setSubscriberStatus('s-0', SubscriberStatus.UNSUBSCRIBED);
+                store.setSubscriberStatus('s-1', SubscriberStatus.UNSUBSCRIBED);
+                return batch;
+            };
+
+            await service.handleSendNewsletter(task);
+
+            expect(mailer.send).not.toHaveBeenCalled();
+            expect(store.rows.every((r) => r.status === D.SKIPPED)).toBe(true);
+            expect(store.newsletter.status).toBe(NewsletterStatus.SENT);
+            expect(store.tasks).toEqual([]);
+        });
     });
 
     it('pauses after a streak of failures instead of burning the list', async () => {

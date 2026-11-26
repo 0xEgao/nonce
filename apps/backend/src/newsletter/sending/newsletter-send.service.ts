@@ -263,11 +263,25 @@ export class NewsletterSendService {
                     await this.releaseUnsent(batch, index, claimedAt);
                     return 'stopped';
                 }
+                // Unsubscribed, bounced or erased since the claim. The row is
+                // now held under `touchedAt`. A skip is not a send or a
+                // failure: no attempt, no budget, no streak.
+                if (
+                    await this.store.skipIfUnwanted(
+                        newsletter.id,
+                        delivery.id,
+                        touchedAt,
+                    )
+                ) {
+                    continue;
+                }
 
                 let failure: { error: unknown } | null = null;
                 try {
                     if (!delivery.token) {
-                        // Erased since the claim; the next batch skips it.
+                        // A backstop only: the token is read at claim time,
+                        // and a subscriber erased since then has just been
+                        // skipped above.
                         throw new Error('The subscriber no longer exists');
                     }
                     const rendered = this.renderService.render(
