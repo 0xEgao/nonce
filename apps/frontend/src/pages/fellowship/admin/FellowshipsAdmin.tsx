@@ -20,7 +20,6 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
-  CircleStop,
   Download,
   PlayCircle,
   Search,
@@ -139,6 +138,18 @@ const handleFor = (f: GetFellowshipResponseDto): string | null => {
   return null;
 };
 
+// Mirrors the backend's end endpoint: ACTIVE, started, endDate still ahead.
+const isRunning = (f: GetFellowshipResponseDto): boolean => {
+  const now = Date.now();
+  return (
+    f.status === FellowshipStatus.ACTIVE &&
+    !!f.startDate &&
+    new Date(f.startDate).getTime() <= now &&
+    !!f.endDate &&
+    new Date(f.endDate).getTime() > now
+  );
+};
+
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
 
@@ -169,7 +180,7 @@ const FellowshipsAdmin = () => {
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
-  // Fellowship whose "End fellowship" confirmation is open (ACTIVE only, admin-only).
+  // Fellowship whose "End fellowship" confirmation is open.
   const [endingFellowship, setEndingFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose document-review dialog is open (download + approve/reject).
   const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
@@ -394,28 +405,33 @@ const FellowshipsAdmin = () => {
         }}
       >
         <Box sx={{ overflowX: 'auto' }}>
-          <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-          {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress size={22} />
-            </Box>
-          ) : fellowships.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                No fellowships match these filters.
-              </Typography>
-            </Box>
-          ) : (
-            fellowships.map((f) => (
-              <FellowshipRow
-                key={f.id}
-                fellowship={f}
-                onOpen={() => setProposalFellowship(f)}
-                onViewProposal={() => setProposalFellowship(f)}
-                onReviewDocuments={() => setDocumentsFellowship(f)}
-              />
-            ))
-          )}
+          {/* min-content keeps every row as wide as the columns when the table
+              has to scroll, so row backgrounds and dividers span the full width. */}
+          <Box sx={{ minWidth: 'min-content' }}>
+            <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                <CircularProgress size={22} />
+              </Box>
+            ) : fellowships.length === 0 ? (
+              <Box sx={{ py: 6, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  No fellowships match these filters.
+                </Typography>
+              </Box>
+            ) : (
+              fellowships.map((f) => (
+                <FellowshipRow
+                  key={f.id}
+                  fellowship={f}
+                  onOpen={() => setProposalFellowship(f)}
+                  onViewProposal={() => setProposalFellowship(f)}
+                  onReviewDocuments={() => setDocumentsFellowship(f)}
+                  onEnd={isRunning(f) ? () => setEndingFellowship(f) : undefined}
+                />
+              ))
+            )}
+          </Box>
         </Box>
         {totalRecords > 0 && fellowships.length > 0 && (
           <PaginationFooter
@@ -444,20 +460,6 @@ const FellowshipsAdmin = () => {
               }}
             >
               Start contract
-            </Button>
-          ) : proposalFellowship?.status === FellowshipStatus.ACTIVE ? (
-            // Ending early is only offered on running contracts, the one state
-            // the backend accepts, and sits behind a confirmation dialog.
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<CircleStop size={15} />}
-              onClick={() => {
-                setEndingFellowship(proposalFellowship);
-                setProposalFellowship(null);
-              }}
-            >
-              End fellowship
             </Button>
           ) : null
         }
@@ -585,9 +587,11 @@ const FilterPill = ({
 
 // Proportional columns so the row fills the width evenly instead of dumping all
 // slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
+// Minimums fit a laptop screen with the sidebar open (~1120px of table).
+// Actions is sized for its widest set: View docs + Proposal + End.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
-const COL_GAP = 2;
+  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(110px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(100px, 0.9fr) 216px';
+const COL_GAP = 1.25;
 
 const SortableHeader = ({
   label,
@@ -777,10 +781,12 @@ const docsAction = (status: FellowshipStatus): { label: string; emphasis: boolea
 const RowActionButton = ({
   label,
   emphasis = false,
+  danger = false,
   onClick,
 }: {
   label: string;
   emphasis?: boolean;
+  danger?: boolean;
   onClick: () => void;
 }) => (
   <Button
@@ -798,7 +804,13 @@ const RowActionButton = ({
       fontSize: '0.75rem',
       lineHeight: 1.4,
       whiteSpace: 'nowrap',
-      ...(emphasis
+      ...(danger
+        ? {
+            color: 'error.light',
+            borderColor: 'rgba(244,67,54,0.5)',
+            '&:hover': { bgcolor: 'rgba(244,67,54,0.12)', borderColor: 'error.main' },
+          }
+        : emphasis
         ? {
             color: 'primary.light',
             borderColor: 'rgba(249,115,22,0.5)',
@@ -825,11 +837,14 @@ const FellowshipRow = ({
   onOpen,
   onViewProposal,
   onReviewDocuments,
+  onEnd,
 }: {
   fellowship: GetFellowshipResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
   onReviewDocuments: () => void;
+  // Only passed for running contracts, the one state the backend can end.
+  onEnd?: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
@@ -980,6 +995,7 @@ const FellowshipRow = ({
       <Stack direction="row" spacing={0.75} alignItems="center">
         <RowActionButton label={docs.label} emphasis={docs.emphasis} onClick={onReviewDocuments} />
         <RowActionButton label="Proposal" onClick={onViewProposal} />
+        {onEnd && <RowActionButton label="End" danger onClick={onEnd} />}
       </Stack>
     </Box>
   );

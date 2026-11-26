@@ -74,13 +74,13 @@ export class FellowshipsController {
     @ApiOperation({
         summary: 'End an active fellowship early (admin)',
         description:
-            'Moves an ACTIVE fellowship to COMPLETED with endDate set to now.',
+            'Moves a running ACTIVE fellowship to COMPLETED with endDate set to now.',
     })
     @Roles(UserRole.ADMIN)
     async endFellowshipEarly(
         @Param('id', new ParseUUIDPipe()) id: string,
-    ): Promise<FellowshipResponseDto> {
-        return this.service.endFellowshipEarly(id);
+    ): Promise<void> {
+        await this.service.endFellowshipEarly(id);
     }
 
     @Get(':id/documents')

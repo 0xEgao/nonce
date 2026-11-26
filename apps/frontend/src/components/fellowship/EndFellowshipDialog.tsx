@@ -1,5 +1,4 @@
 import {
-  Box,
   Button,
   Dialog,
   DialogActions,
@@ -7,11 +6,9 @@ import {
   DialogTitle,
   Typography,
 } from '@mui/material';
-import { formatCohortDate } from '../../helpers/cohortHelpers';
 import { useEndFellowship } from '../../hooks/fellowshipHooks';
 import type { GetFellowshipResponseDto } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
-import { formatFellowshipType } from '../../utils/fellowshipFormat';
 
 type Props = {
   fellowship: GetFellowshipResponseDto | null;
@@ -20,8 +17,8 @@ type Props = {
   onError: (msg: string) => void;
 };
 
-// Confirms ending an ACTIVE fellowship before its contract end date. There is
-// no way to undo this from the app, so the dialog spells out what changes.
+// Confirmation before ending a running fellowship early. The list updates
+// optimistically (see useEndFellowship), so the dialog closes on confirm.
 const EndFellowshipDialog = ({
   fellowship,
   onClose,
@@ -33,6 +30,7 @@ const EndFellowshipDialog = ({
 
   const handleConfirm = async () => {
     if (!fellowship) return;
+    onClose();
     try {
       await endMut.mutateAsync({ id: fellowship.id });
       onSuccess(`Ended ${name}'s fellowship.`);
@@ -42,46 +40,17 @@ const EndFellowshipDialog = ({
   };
 
   return (
-    <Dialog open={!!fellowship} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle sx={{ fontWeight: 700 }}>End fellowship: {name}</DialogTitle>
+    <Dialog open={!!fellowship} onClose={onClose} fullWidth maxWidth="xs">
+      <DialogTitle sx={{ fontWeight: 700 }}>End fellowship?</DialogTitle>
       <DialogContent>
-        {fellowship && (
-          <>
-            <Typography variant="body2" sx={{ mb: 1.5 }}>
-              This ends {name}'s {formatFellowshipType(fellowship.type)}{' '}
-              fellowship today
-              {fellowship.endDate
-                ? ` instead of on ${formatCohortDate(fellowship.endDate)}`
-                : ''}
-              .
-            </Typography>
-            <Box component="ul" sx={{ m: 0, pl: 2.5, typography: 'body2' }}>
-              <li>
-                The fellowship moves to Completed, with today as its end date.
-              </li>
-              <li>The fellow is removed from the public fellows list.</li>
-              <li>The fellow can still submit their final monthly report.</li>
-            </Box>
-            <Typography
-              variant="body2"
-              sx={{ mt: 1.5, color: 'text.secondary' }}
-            >
-              The fellow is not emailed. You can't undo this from the app.
-            </Typography>
-          </>
-        )}
+        <Typography variant="body2">
+          End {name}'s fellowship today? This can't be undone.
+        </Typography>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={endMut.isPending}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          color="error"
-          onClick={handleConfirm}
-          disabled={!fellowship || endMut.isPending}
-        >
-          {endMut.isPending ? 'Ending…' : 'End fellowship'}
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="contained" color="error" onClick={handleConfirm}>
+          End fellowship
         </Button>
       </DialogActions>
     </Dialog>

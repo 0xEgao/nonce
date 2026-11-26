@@ -6,7 +6,13 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, LessThan, Repository } from 'typeorm';
+import {
+    Brackets,
+    LessThan,
+    LessThanOrEqual,
+    MoreThan,
+    Repository,
+} from 'typeorm';
 import { Fellowship } from '@/entities/fellowship.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { User } from '@/entities/user.entity';
@@ -117,62 +123,32 @@ export class FellowshipsService {
     }
 
     /**
-     * Ends an ACTIVE fellowship before its contract end date. This is the same
-     * COMPLETED state the daily sweep reaches when endDate passes, so the
-     * fellow drops off the public fellows list but can still file reports
-     * (fellowshipFormat.ts treats COMPLETED as reportable).
+     * Ends a running fellowship early, into the same COMPLETED state the daily
+     * sweep reaches when endDate passes. Only a contract that has started and
+     * whose endDate is still ahead matches. Check and write are one conditional
+     * UPDATE, so a double click or the sweep can't end it twice.
      */
     async endFellowshipEarly(
         fellowshipId: string,
         now: Date = new Date(),
-    ): Promise<FellowshipResponseDto> {
-        const fellowship = await this.fellowshipRepository.findOne({
-            where: { id: fellowshipId },
-            relations: {
-                user: true,
-                application: true,
+    ): Promise<void> {
+        const result = await this.fellowshipRepository.update(
+            {
+                id: fellowshipId,
+                status: FellowshipStatus.ACTIVE,
+                startDate: LessThanOrEqual(now),
+                endDate: MoreThan(now),
             },
-        });
+            { status: FellowshipStatus.COMPLETED, endDate: now },
+        );
 
-        if (!fellowship) {
-            throw new NotFoundException('Fellowship not found');
+        if (!result.affected) {
+            throw new BadRequestException(
+                'Only a running fellowship can be ended',
+            );
         }
 
-        await this.dbTransactionService.execute(async (manager) => {
-            // Re-read under a write lock so a double click, or the daily sweep
-            // completing the row at the same moment, is decided by the
-            // database rather than by the pre-lock status read above.
-            const locked = await manager.findOne(Fellowship, {
-                where: { id: fellowshipId },
-                lock: { mode: 'pessimistic_write' },
-            });
-            if (!locked) {
-                throw new NotFoundException('Fellowship not found');
-            }
-            if (locked.status !== FellowshipStatus.ACTIVE) {
-                throw new BadRequestException(
-                    locked.status === FellowshipStatus.COMPLETED
-                        ? 'Fellowship has already ended'
-                        : 'Only an active fellowship can be ended',
-                );
-            }
-
-            // Never move endDate later: an ACTIVE row whose endDate already
-            // passed (the sweep has not run yet) keeps its real end date, so
-            // report reminders don't start covering a month it never ran in.
-            fellowship.endDate =
-                locked.endDate && locked.endDate < now ? locked.endDate : now;
-            fellowship.status = FellowshipStatus.COMPLETED;
-
-            await manager.update(Fellowship, fellowshipId, {
-                endDate: fellowship.endDate,
-                status: fellowship.status,
-            });
-        });
-
         this.logger.log(`Ended fellowship ${fellowshipId} early`);
-
-        return FellowshipResponseDto.fromEntity(fellowship);
     }
 
     async getMyFellowships(
