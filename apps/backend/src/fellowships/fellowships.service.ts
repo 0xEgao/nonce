@@ -145,6 +145,15 @@ export class FellowshipsService {
         );
 
         if (!result.affected) {
+            // Nothing matched: tell a missing fellowship apart from one that
+            // exists but isn't running.
+            if (
+                !(await this.fellowshipRepository.existsBy({
+                    id: fellowshipId,
+                }))
+            ) {
+                throw new NotFoundException('Fellowship not found');
+            }
             throw new BadRequestException(
                 'Only a running fellowship can be ended',
             );

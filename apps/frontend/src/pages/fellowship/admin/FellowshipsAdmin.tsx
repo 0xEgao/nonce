@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useOptimistic, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -32,7 +33,11 @@ import StartContractDialog from '../../../components/fellowship/StartContractDia
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
-import { useFellowshipDocuments, useFellowships } from '../../../hooks/fellowshipHooks';
+import {
+  useEndFellowship,
+  useFellowshipDocuments,
+  useFellowships,
+} from '../../../hooks/fellowshipHooks';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
 import fellowshipService from '../../../services/fellowshipService';
@@ -211,6 +216,33 @@ const FellowshipsAdmin = () => {
 
   // The server returns the page already filtered/searched/sorted (nulls last).
   const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
+
+  // Optimistic UI: an ended row shows as Completed at once. React drops this
+  // overlay when the transition below finishes, by which time the list has
+  // been refetched: the real state replaces it on success or on failure.
+  const [shownFellowships, showEnded] = useOptimistic(fellowships, (list, id: string) =>
+    list.map((f) =>
+      f.id === id
+        ? { ...f, status: FellowshipStatus.COMPLETED, endDate: new Date().toISOString() }
+        : f,
+    ),
+  );
+  const queryClient = useQueryClient();
+  const endMut = useEndFellowship();
+  const endFellowship = (f: GetFellowshipResponseDto) => {
+    setEndingFellowship(null);
+    startTransition(async () => {
+      showEnded(f.id);
+      try {
+        await endMut.mutateAsync({ id: f.id });
+        setToast({ kind: 'success', msg: `Ended ${f.userName ?? f.userEmail ?? 'the fellow'}'s fellowship.` });
+      } catch (e) {
+        setToast({ kind: 'error', msg: extractErrorMessage(e) });
+        // The row may have changed meanwhile (e.g. the daily sweep completed it).
+        await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+      }
+    });
+  };
   const totalRecords = data?.totalRecords ?? 0;
   const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
 
@@ -405,33 +437,29 @@ const FellowshipsAdmin = () => {
         }}
       >
         <Box sx={{ overflowX: 'auto' }}>
-          {/* min-content keeps every row as wide as the columns when the table
-              has to scroll, so row backgrounds and dividers span the full width. */}
-          <Box sx={{ minWidth: 'min-content' }}>
-            <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            {isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-                <CircularProgress size={22} />
-              </Box>
-            ) : fellowships.length === 0 ? (
-              <Box sx={{ py: 6, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  No fellowships match these filters.
-                </Typography>
-              </Box>
-            ) : (
-              fellowships.map((f) => (
-                <FellowshipRow
-                  key={f.id}
-                  fellowship={f}
-                  onOpen={() => setProposalFellowship(f)}
-                  onViewProposal={() => setProposalFellowship(f)}
-                  onReviewDocuments={() => setDocumentsFellowship(f)}
-                  onEnd={isRunning(f) ? () => setEndingFellowship(f) : undefined}
-                />
-              ))
-            )}
-          </Box>
+          <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : fellowships.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                No fellowships match these filters.
+              </Typography>
+            </Box>
+          ) : (
+            shownFellowships.map((f) => (
+              <FellowshipRow
+                key={f.id}
+                fellowship={f}
+                onOpen={() => setProposalFellowship(f)}
+                onViewProposal={() => setProposalFellowship(f)}
+                onReviewDocuments={() => setDocumentsFellowship(f)}
+                onEnd={isRunning(f) ? () => setEndingFellowship(f) : undefined}
+              />
+            ))
+          )}
         </Box>
         {totalRecords > 0 && fellowships.length > 0 && (
           <PaginationFooter
@@ -468,11 +496,7 @@ const FellowshipsAdmin = () => {
       <EndFellowshipDialog
         fellowship={endingFellowship}
         onClose={() => setEndingFellowship(null)}
-        onSuccess={(msg) => {
-          setToast({ kind: 'success', msg });
-          setEndingFellowship(null);
-        }}
-        onError={(msg) => setToast({ kind: 'error', msg })}
+        onConfirm={endFellowship}
       />
 
       <StartContractDialog
@@ -587,11 +611,10 @@ const FilterPill = ({
 
 // Proportional columns so the row fills the width evenly instead of dumping all
 // slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
-// Minimums fit a laptop screen with the sidebar open (~1120px of table).
-// Actions is sized for its widest set: View docs + Proposal + End.
+// Actions fits its widest set: View docs + Proposal + End.
 const COLS =
-  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(80px, 0.8fr) minmax(110px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(100px, 0.9fr) 216px';
-const COL_GAP = 1.25;
+  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 216px';
+const COL_GAP = 2;
 
 const SortableHeader = ({
   label,

@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { createUseMutation, createUseQuery } from '../http';
 import fellowshipService from '../services/fellowshipService.ts';
 import type { PaginatedDataDto, PaginatedQueryDto } from '../types/api.ts';
@@ -27,7 +26,6 @@ import type {
   UpdateFellowshipApplicationRequestDto,
   UpdateFellowshipReportRequestDto,
 } from '../types/fellowship.ts';
-import { FellowshipStatus } from '../types/fellowship.ts';
 
 // =========================
 // Fellowship Applications — Queries
@@ -301,53 +299,14 @@ export const useStartFellowshipContract = createUseMutation<
   },
 );
 
-const useEndFellowshipMutation = createUseMutation<void, { id: string }>(
+export const useEndFellowship = createUseMutation<void, { id: string }>(
   ({ id }) => fellowshipService.endFellowship(id),
+  {
+    queryInvalidation: async ({ queryClient }) => {
+      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
+    },
+  },
 );
-
-type FellowshipsPage = PaginatedDataDto<GetFellowshipResponseDto>;
-
-// Optimistic: the moment the admin confirms, the row leaves status-filtered
-// lists (it is no longer ACTIVE) and shows as Completed in the unfiltered one.
-// A failure puts the cached lists back; either way they refetch afterwards.
-export const useEndFellowship = () => {
-  const queryClient = useQueryClient();
-  return useEndFellowshipMutation({
-    onMutate: async ({ id }) => {
-      await queryClient.cancelQueries({ queryKey: ['fellowships', 'list'] });
-      const previous = queryClient.getQueriesData<FellowshipsPage>({
-        queryKey: ['fellowships', 'list'],
-      });
-      const endDate = new Date().toISOString();
-      for (const [key, page] of previous) {
-        if (!page?.records.some((f) => f.id === id)) continue;
-        const query = key[2] as ListFellowshipsQueryDto;
-        queryClient.setQueryData<FellowshipsPage>(
-          key,
-          query.status
-            ? {
-                ...page,
-                records: page.records.filter((f) => f.id !== id),
-                totalRecords: page.totalRecords - 1,
-              }
-            : {
-                ...page,
-                records: page.records.map((f) =>
-                  f.id === id ? { ...f, status: FellowshipStatus.COMPLETED, endDate } : f,
-                ),
-              },
-        );
-      }
-      return { previous };
-    },
-    onError: (_error, _variables, context) => {
-      for (const [key, page] of context?.previous ?? []) {
-        queryClient.setQueryData(key, page);
-      }
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['fellowships'] }),
-  });
-};
 
 // =========================
 // Fellowship Documents — Queries

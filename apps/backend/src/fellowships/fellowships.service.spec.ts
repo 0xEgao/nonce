@@ -142,7 +142,7 @@ describe('FellowshipsService — endFellowshipEarly', () => {
     let service: FellowshipsService;
 
     const now = new Date('2026-11-23T10:00:00Z');
-    const fellowshipRepository = { update: jest.fn() };
+    const fellowshipRepository = { update: jest.fn(), existsBy: jest.fn() };
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -159,6 +159,10 @@ describe('FellowshipsService — endFellowshipEarly', () => {
                 {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: { syncFellowRoles: jest.fn() },
                 },
             ],
         }).compile();
@@ -184,12 +188,22 @@ describe('FellowshipsService — endFellowshipEarly', () => {
         );
     });
 
-    it('rejects when no running fellowship matched', async () => {
+    it('rejects a fellowship that exists but is not running', async () => {
         fellowshipRepository.update.mockResolvedValue({ affected: 0 });
+        fellowshipRepository.existsBy.mockResolvedValue(true);
 
         await expect(
             service.endFellowshipEarly('fellowship-1', now),
         ).rejects.toThrow('Only a running fellowship can be ended');
+    });
+
+    it('404s an unknown fellowship', async () => {
+        fellowshipRepository.update.mockResolvedValue({ affected: 0 });
+        fellowshipRepository.existsBy.mockResolvedValue(false);
+
+        await expect(
+            service.endFellowshipEarly('missing', now),
+        ).rejects.toThrow('Fellowship not found');
     });
 });
 
