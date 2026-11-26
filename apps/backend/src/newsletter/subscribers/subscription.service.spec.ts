@@ -504,6 +504,35 @@ describe('SubscriptionService', () => {
             expect(result.lists).toEqual([]);
         });
 
+        it('leaves a row unsubscribed after it was read as PENDING', async () => {
+            const weekly = store.addList({ name: 'Weekly' });
+            const alice = store.addSubscriber('alice@example.com', {
+                status: SubscriberStatus.UNSUBSCRIBED,
+            });
+            const row = store.addRow(weekly, alice, SubscriptionStatus.PENDING);
+            const leftAt = new Date('2026-03-01T00:00:00Z');
+            // The read sees the row PENDING; an unsubscribe lands before the
+            // update.
+            store.manager.find.mockImplementationOnce(async () => {
+                const snapshot = { ...row };
+                Object.assign(row, {
+                    status: SubscriptionStatus.UNSUBSCRIBED,
+                    unsubscribedAt: leftAt,
+                });
+                return [snapshot];
+            });
+
+            const result = await service.confirm(alice.token);
+
+            expect(row).toMatchObject({
+                status: SubscriptionStatus.UNSUBSCRIBED,
+                unsubscribedAt: leftAt,
+                confirmedAt: null,
+            });
+            expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
+            expect(result.lists).toEqual([]);
+        });
+
         it('404s on an unknown token', async () => {
             await expect(service.confirm('nope')).rejects.toBeInstanceOf(
                 NotFoundException,
@@ -848,6 +877,107 @@ describe('SubscriptionService', () => {
             expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
             expect(store.rowFor(events, alice)?.status).toBe(
                 SubscriptionStatus.UNSUBSCRIBED,
+            );
+        });
+
+        describe('an ad-hoc recipient with a row on one of its lists', () => {
+            const leftAt = new Date('2026-02-01T00:00:00Z');
+
+            // Alice left Weekly, then got a Weekly newsletter anyway because
+            // her address was also typed in as an ad-hoc recipient.
+            const seedLeftThenAdHoc = (adHocEmail = 'alice@example.com') => {
+                const weekly = store.addList({ name: 'Weekly' });
+                const alice = store.addSubscriber('alice@example.com');
+                store.addRow(weekly, alice, SubscriptionStatus.UNSUBSCRIBED, {
+                    unsubscribedAt: leftAt,
+                });
+                const newsletter = store.addNewsletter([weekly], {
+                    adHocEmails: [adHocEmail],
+                });
+                return { weekly, alice, newsletter };
+            };
+
+            it('who left that list is unsubscribed globally, the same on every click', async () => {
+                const { weekly, alice, newsletter } = seedLeftThenAdHoc();
+                const request = {
+                    token: alice.token,
+                    newsletterId: newsletter.id,
+                };
+
+                const first = await service.unsubscribe(request);
+
+                expect(first).toEqual({
+                    email: 'alice@example.com',
+                    unsubscribedLists: ['Weekly'],
+                    global: true,
+                });
+                expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
+                expect(store.rowFor(weekly, alice)).toMatchObject({
+                    status: SubscriptionStatus.UNSUBSCRIBED,
+                    unsubscribedAt: leftAt,
+                });
+                expect(await service.unsubscribe(request)).toEqual(first);
+            });
+
+            it('one-click unsubscribes them globally too', async () => {
+                const { weekly, alice, newsletter } = seedLeftThenAdHoc();
+
+                await service.unsubscribeOneClick(alice.token, newsletter.id);
+
+                expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
+                expect(store.rowFor(weekly, alice)?.unsubscribedAt).toBe(
+                    leftAt,
+                );
+            });
+
+            it('matches an ad-hoc entry whatever its case or spacing', async () => {
+                const { alice, newsletter } = seedLeftThenAdHoc(
+                    '  Alice@Example.COM ',
+                );
+
+                const result = await service.unsubscribe({
+                    token: alice.token,
+                    newsletterId: newsletter.id,
+                });
+
+                expect(result.global).toBe(true);
+                expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
+            });
+
+            const otherStatuses: SubscriptionStatus[] = [
+                SubscriptionStatus.PENDING,
+                // Leaving Weekly alone would not stop the ad-hoc copy.
+                SubscriptionStatus.SUBSCRIBED,
+            ];
+            it.each(otherStatuses)(
+                'whose row is %s is unsubscribed globally',
+                async (status) => {
+                    const weekly = store.addList({ name: 'Weekly' });
+                    const events = store.addList({ name: 'Events' });
+                    const alice = store.addSubscriber('alice@example.com');
+                    store.addRow(weekly, alice, status);
+                    store.addRow(events, alice, SubscriptionStatus.SUBSCRIBED);
+                    const newsletter = store.addNewsletter([weekly], {
+                        adHocEmails: ['alice@example.com'],
+                    });
+
+                    const result = await service.unsubscribe({
+                        token: alice.token,
+                        newsletterId: newsletter.id,
+                    });
+
+                    expect(result).toEqual({
+                        email: 'alice@example.com',
+                        unsubscribedLists: ['Events', 'Weekly'],
+                        global: true,
+                    });
+                    expect(alice.status).toBe(SubscriberStatus.UNSUBSCRIBED);
+                    for (const list of [weekly, events]) {
+                        expect(store.rowFor(list, alice)?.status).toBe(
+                            SubscriptionStatus.UNSUBSCRIBED,
+                        );
+                    }
+                },
             );
         });
 

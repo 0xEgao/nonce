@@ -232,6 +232,108 @@ describe('MailingListsService', () => {
             expect(result).toMatchObject({ added: 0, alreadySubscribed: 1 });
         });
 
+        describe('a PENDING row that changes after the plan read it', () => {
+            const leftAt = new Date('2026-02-01T00:00:00Z');
+            const confirmedAt = new Date('2026-02-02T00:00:00Z');
+
+            // The plan reads a copy of the row; `change` then lands on the
+            // stored one before the promote runs.
+            const raceRow = (change: Partial<MailingListSubscription>) => {
+                const person = store.addSubscriber('person@example.com');
+                const row = store.addRow(
+                    list,
+                    person,
+                    SubscriptionStatus.PENDING,
+                );
+                store.manager.find.mockImplementationOnce(async () => [person]);
+                store.manager.find.mockImplementationOnce(async () => {
+                    const snapshot = { ...row };
+                    Object.assign(row, change);
+                    return [snapshot];
+                });
+                return row;
+            };
+
+            const add = (resubscribe?: boolean) =>
+                service.addSubscribers(list.id, {
+                    subscribers: [{ email: 'person@example.com' }],
+                    resubscribe,
+                });
+
+            it('stays unsubscribed when they left in between', async () => {
+                const row = raceRow({
+                    status: SubscriptionStatus.UNSUBSCRIBED,
+                    unsubscribedAt: leftAt,
+                });
+
+                const result = await add();
+
+                expect(row).toMatchObject({
+                    status: SubscriptionStatus.UNSUBSCRIBED,
+                    unsubscribedAt: leftAt,
+                });
+                expect(result).toEqual({
+                    added: 0,
+                    alreadySubscribed: 0,
+                    skippedUnsubscribed: 1,
+                    skippedSuppressed: 0,
+                    invalid: [],
+                });
+            });
+
+            it('stays PENDING when they left and signed up again in between', async () => {
+                const row = raceRow({ unsubscribedAt: leftAt });
+
+                const result = await add();
+
+                expect(row).toMatchObject({
+                    status: SubscriptionStatus.PENDING,
+                    unsubscribedAt: leftAt,
+                });
+                expect(result).toMatchObject({
+                    added: 0,
+                    skippedUnsubscribed: 1,
+                });
+            });
+
+            it('counts a row confirmed in between as already subscribed', async () => {
+                const row = raceRow({
+                    status: SubscriptionStatus.SUBSCRIBED,
+                    confirmedAt,
+                });
+
+                const result = await add();
+
+                expect(row).toMatchObject({
+                    status: SubscriptionStatus.SUBSCRIBED,
+                    confirmedAt,
+                });
+                expect(result).toMatchObject({
+                    added: 0,
+                    alreadySubscribed: 1,
+                    skippedUnsubscribed: 0,
+                });
+            });
+
+            it('with resubscribe, still brings them back', async () => {
+                const row = raceRow({
+                    status: SubscriptionStatus.UNSUBSCRIBED,
+                    unsubscribedAt: leftAt,
+                });
+
+                const result = await add(true);
+
+                expect(row).toMatchObject({
+                    status: SubscriptionStatus.SUBSCRIBED,
+                    unsubscribedAt: null,
+                });
+                expect(result).toMatchObject({
+                    added: 1,
+                    skippedUnsubscribed: 0,
+                });
+            });
+        });
+
         it('works through a large import in chunks', async () => {
             const subscribers = Array.from({ length: 2500 }, (_, i) => ({
                 email: `person${i}@example.com`,

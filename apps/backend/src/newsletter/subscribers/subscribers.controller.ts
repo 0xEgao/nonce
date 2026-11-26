@@ -52,7 +52,8 @@ export class SubscribersController {
     @Delete(':id')
     @HttpCode(HttpStatus.NO_CONTENT)
     @ApiOperation({
-        summary: 'Erase an address and its subscriptions (admin)',
+        summary:
+            'Delete a subscriber and their subscriptions; past send history keeps the address (admin)',
     })
     async remove(@Param('id', new ParseUUIDPipe()) id: string): Promise<void> {
         await this.service.remove(id);

@@ -77,18 +77,25 @@ export class SubscribersService {
         });
         if (!subscriber) throw new NotFoundException('Subscriber not found');
 
+        // Only the columns the request changes: save() would also write back
+        // any other column that differs from the row it re-reads, e.g. a
+        // stale status over an unsubscribe made since the read above.
+        const changes: Partial<Subscriber> = {};
         if (request.name !== undefined) {
-            subscriber.name = request.name?.trim() || null;
+            changes.name = request.name?.trim() || null;
         }
         if (request.status && request.status !== subscriber.status) {
-            subscriber.status = request.status;
-            subscriber.statusReason =
+            changes.status = request.status;
+            changes.statusReason =
                 request.status === SubscriberStatus.ACTIVE
                     ? null
                     : ADMIN_STATUS_REASON;
-            subscriber.statusChangedAt = new Date();
+            changes.statusChangedAt = new Date();
         }
-        await this.subscriberRepository.save(subscriber);
+        if (Object.keys(changes).length > 0) {
+            await this.subscriberRepository.update({ id }, changes);
+            Object.assign(subscriber, changes);
+        }
 
         const listCount = await this.subscriptionRepository.count({
             where: { subscriber: { id } },
@@ -97,9 +104,10 @@ export class SubscribersService {
     }
 
     /**
-     * Erases the address and every subscription it has. Past deliveries keep
-     * their copy of the email for the send history; their link to the
-     * subscriber is nulled by the foreign key.
+     * Deletes the subscriber and every subscription it has. This is not an
+     * erasure: past deliveries keep their copy of the address and name for
+     * the send history; only their link to the subscriber is nulled by the
+     * foreign key.
      */
     async remove(id: string): Promise<void> {
         const result = await this.subscriberRepository.delete({ id });

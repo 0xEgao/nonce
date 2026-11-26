@@ -243,10 +243,15 @@ export class SubscriptionStore {
         return row;
     }
 
-    addNewsletter(lists: MailingList[]): Newsletter {
+    addNewsletter(
+        lists: MailingList[],
+        values: Partial<Newsletter> = {},
+    ): Newsletter {
         const newsletter = {
             id: `00000000-0000-4000-8000-${String(this.nextId++).padStart(12, '0')}`,
             lists,
+            adHocEmails: [],
+            ...values,
         } as Newsletter;
         this.newsletters.push(newsletter);
         return newsletter;

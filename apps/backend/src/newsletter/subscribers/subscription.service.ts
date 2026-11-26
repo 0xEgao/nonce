@@ -312,15 +312,21 @@ export class SubscriptionService {
             // may undo a global unsubscribe made since.
             if (pending.length === 0) return;
 
-            await manager.update(
+            // Still PENDING: a row unsubscribed since the read stays off, and
+            // when none is left neither is the address reactivated.
+            const { affected } = await manager.update(
                 MailingListSubscription,
-                { id: In(pending.map((row) => row.id)) },
+                {
+                    id: In(pending.map((row) => row.id)),
+                    status: SubscriptionStatus.PENDING,
+                },
                 {
                     status: SubscriptionStatus.SUBSCRIBED,
                     confirmedAt: now,
                     unsubscribedAt: null,
                 },
             );
+            if (!affected) return;
             // Confirming proves the inbox works and wants mail.
             await this.setSubscriberStatus(
                 manager,
@@ -382,13 +388,19 @@ export class SubscriptionService {
         let global = request.all === true || !request.newsletterId;
         let scoped = rows;
         if (!global && request.newsletterId) {
-            const listIds = await this.findNewsletterListIds(
+            const audience = await this.findNewsletterAudience(
                 request.newsletterId,
             );
-            scoped = rows.filter((row) => listIds.has(row.list.id));
+            scoped = rows.filter((row) => audience.listIds.has(row.list.id));
             // An ad-hoc recipient (or an unknown newsletter): there is no list
-            // to leave, so the only way to stop the mail is everywhere.
-            if (scoped.length === 0) {
+            // to leave, so the only way to stop the mail is everywhere. That
+            // holds even when the address also has a row, in any status, on
+            // one of its lists: leaving those would not stop the ad-hoc copy,
+            // and a repeat click must give the same answer.
+            if (
+                scoped.length === 0 ||
+                audience.adHocEmails.has(normalizeEmail(subscriber.email))
+            ) {
                 global = true;
                 scoped = rows;
             }
@@ -854,16 +866,24 @@ export class SubscriptionService {
         );
     }
 
-    private async findNewsletterListIds(
-        newsletterId: string,
-    ): Promise<Set<string>> {
+    /** Empty for an unknown or malformed id. */
+    private async findNewsletterAudience(newsletterId: string): Promise<{
+        listIds: Set<string>;
+        adHocEmails: Set<string>;
+    }> {
         // The id arrives from a link; a malformed one would be a query error.
-        if (!isUUID(newsletterId)) return new Set();
-        const newsletter = await this.newsletterRepository.findOne({
-            where: { id: newsletterId },
-            relations: { lists: true },
-        });
-        return new Set(newsletter?.lists.map((list) => list.id) ?? []);
+        const newsletter = isUUID(newsletterId)
+            ? await this.newsletterRepository.findOne({
+                  where: { id: newsletterId },
+                  relations: { lists: true },
+              })
+            : null;
+        return {
+            listIds: new Set(newsletter?.lists.map((list) => list.id) ?? []),
+            adHocEmails: new Set(
+                newsletter?.adHocEmails.map(normalizeEmail) ?? [],
+            ),
+        };
     }
 
     private async findByTokenOrFail(token: string): Promise<Subscriber> {

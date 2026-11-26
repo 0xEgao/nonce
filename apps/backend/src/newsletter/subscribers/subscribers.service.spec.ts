@@ -94,7 +94,45 @@ describe('SubscribersService', () => {
         });
     });
 
-    it('erases an address', async () => {
+    it('a rename does not write back a status changed since the read', async () => {
+        const alice = store.addSubscriber('alice@example.com');
+        const unsubscribedAt = new Date('2026-03-01T00:00:00Z');
+        // The read sees Alice ACTIVE; she unsubscribes before the write.
+        subscriberRepository.findOne.mockImplementationOnce(async () => {
+            const snapshot = { ...alice };
+            Object.assign(alice, {
+                status: SubscriberStatus.UNSUBSCRIBED,
+                statusReason: 'Unsubscribed from all lists',
+                statusChangedAt: unsubscribedAt,
+            });
+            return snapshot;
+        });
+
+        const result = await service.update(alice.id, { name: ' Alice ' });
+
+        expect(alice).toMatchObject({
+            name: 'Alice',
+            status: SubscriberStatus.UNSUBSCRIBED,
+            statusReason: 'Unsubscribed from all lists',
+            statusChangedAt: unsubscribedAt,
+        });
+        expect(result.name).toBe('Alice');
+        expect(subscriberRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing for an empty edit', async () => {
+        const alice = store.addSubscriber('alice@example.com');
+
+        const result = await service.update(alice.id, {});
+
+        expect(subscriberRepository.update).not.toHaveBeenCalled();
+        expect(result).toMatchObject({
+            email: 'alice@example.com',
+            status: SubscriberStatus.ACTIVE,
+        });
+    });
+
+    it('deletes a subscriber', async () => {
         const alice = store.addSubscriber('alice@example.com');
 
         await service.remove(alice.id);

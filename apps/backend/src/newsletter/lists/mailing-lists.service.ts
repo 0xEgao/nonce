@@ -53,6 +53,7 @@ import {
 import {
     chunk,
     decideImport,
+    hasOptedOut,
     ImportCounts,
     ImportEntry,
     insertIgnoringConflicts,
@@ -455,7 +456,13 @@ export class MailingListsService {
                     options.resubscribe,
                 );
                 if (!options.dryRun) {
-                    await this.applyImport(manager, listId, plan, source);
+                    await this.applyImport(
+                        manager,
+                        listId,
+                        plan,
+                        source,
+                        options.resubscribe,
+                    );
                 }
                 for (const key of Object.keys(
                     counts,
@@ -543,6 +550,7 @@ export class MailingListsService {
         listId: string,
         plan: ImportPlan,
         source: SubscriptionSource,
+        resubscribe: boolean,
     ): Promise<void> {
         const now = new Date();
 
@@ -584,15 +592,31 @@ export class MailingListsService {
         }
 
         if (plan.promoteRows.length > 0) {
-            await manager.update(
+            // The plan's reads take no lock. Without `resubscribe` it only
+            // promotes a PENDING row that never opted out, so the update
+            // checks that still holds: someone who unsubscribes in between
+            // stays unsubscribed. With it, the admin chose to override
+            // opt-outs.
+            const { affected } = await manager.update(
                 MailingListSubscription,
-                { id: In(plan.promoteRows) },
+                resubscribe
+                    ? { id: In(plan.promoteRows) }
+                    : {
+                          id: In(plan.promoteRows),
+                          status: SubscriptionStatus.PENDING,
+                          unsubscribedAt: IsNull(),
+                      },
                 {
                     status: SubscriptionStatus.SUBSCRIBED,
                     confirmedAt: now,
                     unsubscribedAt: null,
                 },
             );
+            const lost =
+                plan.promoteRows.length - (affected ?? plan.promoteRows.length);
+            if (lost > 0) {
+                await this.recountLostPromotions(manager, plan, lost);
+            }
         }
         if (plan.reactivate.length > 0) {
             await manager.update(
@@ -616,6 +640,27 @@ export class MailingListsService {
                 ],
             );
         }
+    }
+
+    /**
+     * Moves the `lost` promotions the update skipped out of `added`. The
+     * promoted rows are SUBSCRIBED and locked until commit, so every row that
+     * has since opted out or gone was lost; the rest of the lost ones are
+     * SUBSCRIBED because they were confirmed concurrently.
+     */
+    private async recountLostPromotions(
+        manager: EntityManager,
+        plan: ImportPlan,
+        lost: number,
+    ): Promise<void> {
+        const rows = await manager.find(MailingListSubscription, {
+            where: { id: In(plan.promoteRows) },
+        });
+        const gone = plan.promoteRows.length - rows.length;
+        const optedOut = gone + rows.filter(hasOptedOut).length;
+        plan.counts.added -= lost;
+        plan.counts.skippedUnsubscribed += optedOut;
+        plan.counts.alreadySubscribed += lost - optedOut;
     }
 }
 
