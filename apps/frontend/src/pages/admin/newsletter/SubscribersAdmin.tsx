@@ -369,15 +369,16 @@ const SubscribersAdmin = () => {
           }}
         >
           <Box component="p" sx={{ mt: 0 }}>
-            This erases <strong>{deleting.email}</strong> and their
+            This deletes <strong>{deleting.email}</strong> and their
             subscriptions on every list
             {deleting.listCount > 0 &&
               ` (${plural(deleting.listCount, 'list')})`}
             . It cannot be undone.
           </Box>
           <Box component="p" sx={{ mb: 0 }}>
-            If they sign up again later they start from scratch, so any past
-            unsubscribe is forgotten.
+            Past newsletter reports still show this address and name. If they
+            sign up again later they start from scratch, so any past unsubscribe
+            or bounce is forgotten.
           </Box>
         </ConfirmDialog>
       )}

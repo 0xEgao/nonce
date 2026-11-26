@@ -47,6 +47,10 @@ const NewsletterReport = ({ newsletter }: Props) => {
 
   const { stats } = newsletter;
   const sending = newsletter.status === NewsletterStatus.SENDING;
+  // The API refuses a retry on anything but SENDING and SENT.
+  const canRetry =
+    stats.failed > 0 &&
+    (sending || newsletter.status === NewsletterStatus.SENT);
   const paused = sending && isPausedNow(newsletter.pausedUntil);
   const processed = stats.sent + stats.failed + stats.skipped;
   const progress = stats.total > 0 ? (processed / stats.total) * 100 : 0;
@@ -75,7 +79,7 @@ const NewsletterReport = ({ newsletter }: Props) => {
         newsletter={newsletter}
         actions={
           <>
-            {stats.failed > 0 && (
+            {canRetry && (
               <Button
                 variant="outlined"
                 startIcon={<RefreshCw size={14} />}
@@ -313,13 +317,13 @@ const NewsletterReport = ({ newsletter }: Props) => {
       <ConfirmDialog
         open={confirm === 'retry'}
         title="Retry failed deliveries?"
-        confirmLabel={`Retry ${stats.failed.toLocaleString()}`}
+        confirmLabel="Retry"
         onClose={() => setConfirm(null)}
         onConfirm={() => retry.mutateAsync({ id: newsletter.id })}
       >
-        The {plural(stats.failed, 'failed delivery', 'failed deliveries')} will
-        be queued again and sending resumes. Addresses that bounced permanently
-        will most likely fail again.
+        Up to {plural(stats.failed, 'failed delivery', 'failed deliveries')}{' '}
+        will be queued again and sending resumes. Addresses that bounced,
+        unsubscribed, left this newsletter's lists or were deleted are left out.
       </ConfirmDialog>
     </>
   );
