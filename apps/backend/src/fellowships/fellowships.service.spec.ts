@@ -8,6 +8,7 @@ import { Fellowship } from '@/entities/fellowship.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { TaskType } from '@/task-processor/task.enums';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
+import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 import {
     FellowshipStatus,
     FellowshipType,
@@ -18,6 +19,10 @@ import {
 // after startDate, cannot be more than 24 months from today, and (now that
 // the backend no longer derives it from a duration) the submitted endDate is
 // what gets persisted verbatim.
+
+// Shared by every suite below; only the daily-job tests give it behaviour.
+const fellowDiscordRolesService = { syncFellowRoles: jest.fn() };
+
 describe('FellowshipsService — startContract', () => {
     let service: FellowshipsService;
 
@@ -67,6 +72,10 @@ describe('FellowshipsService — startContract', () => {
                 {
                     provide: DbTransactionService,
                     useValue: dbTransactionService,
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -195,6 +204,9 @@ describe('FellowshipsService — listPublicFellows', () => {
         type: FellowshipType.DEVELOPER,
         kind: FellowshipKind.STARTER_GRANT,
         status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-02-01T00:00:00.000Z'),
+        endDate: new Date('2026-08-01T00:00:00.000Z'),
+        amountUsd: '6000.00',
         createdAt: new Date('2026-01-01'),
         updatedAt: new Date('2026-01-01'),
         user: {
@@ -207,6 +219,8 @@ describe('FellowshipsService — listPublicFellows', () => {
         application: {
             id: 'app-1',
             type: FellowshipType.DESIGNER,
+            github: 'alice-dev',
+            title: 'Proposal title',
             projectName: 'Project',
             projectGithubLink: 'https://github.com/alice/project',
             mentorContact: 'mentor@example.com',
@@ -236,6 +250,10 @@ describe('FellowshipsService — listPublicFellows', () => {
                 {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -270,13 +288,62 @@ describe('FellowshipsService — listPublicFellows', () => {
         expect({ ...result.records[0] }).toStrictEqual({
             id: fellowship.id,
             displayName: fellowship.user.displayName,
-            githubProfileUrl: fellowship.user.githubProfileUrl,
+            // The profile URL wins over the application's older handle.
+            githubUsername: 'alice',
+            githubProfileUrl: 'https://github.com/alice',
             projectName: fellowship.application.projectName,
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
+            startDate: '2026-02-01T00:00:00.000Z',
+            endDate: '2026-08-01T00:00:00.000Z',
         });
     });
+
+    it('passes a missing project name through as null, without falling back to the proposal title', async () => {
+        const noProject = {
+            ...fellowship,
+            application: { ...fellowship.application, projectName: null },
+        };
+        fellowshipRepository.findAndCount.mockResolvedValue([[noProject], 1]);
+
+        const result = await service.listPublicFellows({
+            page: 0,
+            pageSize: 20,
+        });
+
+        expect(result.records[0].projectName).toBeNull();
+    });
+
+    // githubUsername and githubProfileUrl must always name the same account.
+    it.each([
+        // [profile URL, application handle, expected username]
+        ['https://GitHub.com/Alice/', 'alice-dev', 'Alice'],
+        ['https://github.com/alice/project', 'alice-dev', 'alice-dev'],
+        [null, 'alice-dev', 'alice-dev'],
+        ['https://gitlab.com/alice', null, null],
+        [null, null, null],
+    ])(
+        'derives one GitHub identity from profile %s and handle %s',
+        async (githubProfileUrl, github, expected) => {
+            const row = {
+                ...fellowship,
+                user: { ...fellowship.user, githubProfileUrl },
+                application: { ...fellowship.application, github },
+            };
+            fellowshipRepository.findAndCount.mockResolvedValue([[row], 1]);
+
+            const result = await service.listPublicFellows({
+                page: 0,
+                pageSize: 20,
+            });
+
+            expect(result.records[0].githubUsername).toBe(expected);
+            expect(result.records[0].githubProfileUrl).toBe(
+                expected ? `https://github.com/${expected}` : null,
+            );
+        },
+    );
 });
 
 describe('FellowshipsService — completeEndedFellowships', () => {
@@ -302,6 +369,10 @@ describe('FellowshipsService — completeEndedFellowships', () => {
                 {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -375,6 +446,29 @@ describe('FellowshipsService — completeEndedFellowships', () => {
     });
 
     describe('handleCompleteEndedFellowships', () => {
+        beforeEach(() => {
+            fellowDiscordRolesService.syncFellowRoles.mockResolvedValue(
+                undefined,
+            );
+        });
+
+        it('syncs fellow Discord roles after the sweep', async () => {
+            const order: string[] = [];
+            fellowshipRepository.update.mockImplementation(async () => {
+                order.push('sweep');
+                return { affected: 1 };
+            });
+            fellowDiscordRolesService.syncFellowRoles.mockImplementation(
+                async () => {
+                    order.push('roles');
+                },
+            );
+
+            await service.handleCompleteEndedFellowships(task(0));
+
+            expect(order).toEqual(['sweep', 'roles']);
+        });
+
         it('sweeps, then queues exactly one next run', async () => {
             jest.useFakeTimers().setSystemTime(
                 new Date('2026-11-16T04:00:05Z'),
