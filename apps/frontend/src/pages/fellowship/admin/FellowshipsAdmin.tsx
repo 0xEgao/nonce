@@ -390,28 +390,32 @@ const FellowshipsAdmin = () => {
         }}
       >
         <Box sx={{ overflowX: 'auto' }}>
-          <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-          {isLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress size={22} />
-            </Box>
-          ) : fellowships.length === 0 ? (
-            <Box sx={{ py: 6, textAlign: 'center' }}>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                No fellowships match these filters.
-              </Typography>
-            </Box>
-          ) : (
-            fellowships.map((f) => (
-              <FellowshipRow
-                key={f.id}
-                fellowship={f}
-                onOpen={() => setProposalFellowship(f)}
-                onViewProposal={() => setProposalFellowship(f)}
-                onReviewDocuments={() => setDocumentsFellowship(f)}
-              />
-            ))
-          )}
+          {/* min-content keeps every row as wide as the columns when the table
+              has to scroll, so row backgrounds and dividers span the full width. */}
+          <Box sx={{ minWidth: 'min-content' }}>
+            <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                <CircularProgress size={22} />
+              </Box>
+            ) : fellowships.length === 0 ? (
+              <Box sx={{ py: 6, textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  No fellowships match these filters.
+                </Typography>
+              </Box>
+            ) : (
+              fellowships.map((f) => (
+                <FellowshipRow
+                  key={f.id}
+                  fellowship={f}
+                  onOpen={() => setProposalFellowship(f)}
+                  onViewProposal={() => setProposalFellowship(f)}
+                  onReviewDocuments={() => setDocumentsFellowship(f)}
+                />
+              ))
+            )}
+          </Box>
         </Box>
         {totalRecords > 0 && fellowships.length > 0 && (
           <PaginationFooter
@@ -557,9 +561,11 @@ const FilterPill = ({
 
 // Proportional columns so the row fills the width evenly instead of dumping all
 // slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
+// Minimums fit a laptop screen with the sidebar open (~1120px of table).
+// Kind fits "Starter Grant" on one line; Project truncates first, with an ellipsis.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
-const COL_GAP = 2;
+  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(104px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(100px, 0.9fr) 200px';
+const COL_GAP = 1.25;
 
 const SortableHeader = ({
   label,
