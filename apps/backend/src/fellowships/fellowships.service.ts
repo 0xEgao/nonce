@@ -11,6 +11,7 @@ import { Fellowship } from '@/entities/fellowship.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { User } from '@/entities/user.entity';
 import {
+    ChangeFellowshipEndDateDto,
     FellowshipSortBy,
     ListFellowshipsQueryDto,
     StartFellowshipContractDto,
@@ -26,6 +27,10 @@ import { addMonths, escapeLikePattern } from '@/common/common';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
 import { TaskType } from '@/task-processor/task.enums';
 import { isLastRetry } from '@/task-processor/task-processor.utils';
+import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
+
+// No contract may end more than this many months from today.
+const MAX_CONTRACT_MONTHS = 24;
 
 // The sweep runs daily at this UTC hour.
 const COMPLETE_ENDED_FELLOWSHIPS_HOUR_UTC = 4;
@@ -47,6 +52,7 @@ export class FellowshipsService {
         @InjectRepository(APITask)
         private readonly apiTaskRepository: Repository<APITask<any>>,
         private readonly dbTransactionService: DbTransactionService,
+        private readonly fellowDiscordRolesService: FellowDiscordRolesService,
     ) {}
 
     async startContract(
@@ -72,10 +78,8 @@ export class FellowshipsService {
             throw new BadRequestException('End date must be after start date');
         }
 
-        // Cap the contract end date at 24 months from today, the same ceiling
-        // the removed `periodMonths` field enforced via @Max(24).
-        const maxEndDate = addMonths(new Date(), 24);
-        if (endDate > maxEndDate) {
+        // The same ceiling the removed `periodMonths` field enforced via @Max(24).
+        if (endDate > addMonths(new Date(), MAX_CONTRACT_MONTHS)) {
             throw new BadRequestException(
                 'End date cannot be more than 24 months from today',
             );
@@ -114,6 +118,87 @@ export class FellowshipsService {
         });
 
         return FellowshipResponseDto.fromEntity(fellowship);
+    }
+
+    /**
+     * Moves the contract end date of an ACTIVE fellowship that hasn't ended:
+     * earlier or later, up to the same 24-month cap as startContract. A date
+     * that has already passed completes the fellowship now, the state the daily
+     * sweep would reach; a future date leaves it ACTIVE for the sweep. The first
+     * change keeps the contracted date in originalEndDate, and every change
+     * records the admin and time.
+     */
+    async changeEndDate(
+        fellowshipId: string,
+        dto: ChangeFellowshipEndDateDto,
+        admin: User,
+        now: Date = new Date(),
+    ): Promise<FellowshipResponseDto> {
+        const endDate = new Date(dto.endDate);
+
+        if (endDate > addMonths(now, MAX_CONTRACT_MONTHS)) {
+            throw new BadRequestException(
+                'End date cannot be more than 24 months from today',
+            );
+        }
+
+        const previousEndDate = await this.dbTransactionService.execute(
+            async (manager) => {
+                // Locked so a concurrent change or the daily sweep can't
+                // interleave between these checks and the write.
+                const locked = await manager.findOne(Fellowship, {
+                    where: { id: fellowshipId },
+                    lock: { mode: 'pessimistic_write' },
+                });
+                if (!locked) {
+                    throw new NotFoundException('Fellowship not found');
+                }
+                // An ACTIVE contract always has both dates (startContract sets
+                // them). One whose endDate has passed is the sweep's to complete.
+                if (
+                    locked.status !== FellowshipStatus.ACTIVE ||
+                    !locked.startDate ||
+                    !locked.endDate ||
+                    locked.endDate <= now
+                ) {
+                    throw new BadRequestException(
+                        'Only an active fellowship that hasn’t ended can have its end date changed',
+                    );
+                }
+                if (endDate <= locked.startDate) {
+                    throw new BadRequestException(
+                        'End date must be after start date',
+                    );
+                }
+                if (endDate.getTime() === locked.endDate.getTime()) {
+                    throw new BadRequestException(
+                        'The fellowship already ends on that date',
+                    );
+                }
+
+                await manager.update(Fellowship, fellowshipId, {
+                    endDate,
+                    status:
+                        endDate <= now
+                            ? FellowshipStatus.COMPLETED
+                            : FellowshipStatus.ACTIVE,
+                    originalEndDate: locked.originalEndDate ?? locked.endDate,
+                    endDateChangedBy: { id: admin.id },
+                    endDateChangedAt: now,
+                });
+                return locked.endDate;
+            },
+        );
+
+        this.logger.log(
+            `Admin ${admin.id} changed fellowship ${fellowshipId} end date from ${previousEndDate.toISOString()} to ${endDate.toISOString()}`,
+        );
+
+        const updated = await this.fellowshipRepository.findOneOrFail({
+            where: { id: fellowshipId },
+            relations: { user: true, application: true },
+        });
+        return FellowshipResponseDto.fromEntity(updated);
     }
 
     async getMyFellowships(
@@ -251,6 +336,10 @@ export class FellowshipsService {
                     `Marked ${completed} ended fellowship(s) as COMPLETED`,
                 );
             }
+
+            // After the sweep, so a fellowship completed this run loses its
+            // role in the same run.
+            await this.fellowDiscordRolesService.syncFellowRoles();
 
             await this.scheduleNextCompleteEndedFellowships();
         } catch (error) {

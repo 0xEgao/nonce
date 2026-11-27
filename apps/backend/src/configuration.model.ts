@@ -104,6 +104,17 @@ class DiscordRolesConfig {
 
     @IsNumberString({ no_symbols: true })
     alumniBuildingBitcoinInRust: string;
+
+    // Fellow roles, one per FellowshipType, granted once a contract starts and
+    // removed when it ends, by the daily fellowship job.
+    @IsNumberString({ no_symbols: true })
+    devFellow: string;
+
+    @IsNumberString({ no_symbols: true })
+    eduFellow: string;
+
+    @IsNumberString({ no_symbols: true })
+    designFellow: string;
 }
 
 class DiscordInviteUrlsConfig {

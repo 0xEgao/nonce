@@ -13,6 +13,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -21,9 +22,11 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  Pencil,
   PlayCircle,
   Search,
 } from 'lucide-react';
+import ChangeEndDateDialog from '../../../components/fellowship/ChangeEndDateDialog';
 import DocumentList from '../../../components/fellowship/DocumentList';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
@@ -137,6 +140,13 @@ const handleFor = (f: GetFellowshipResponseDto): string | null => {
   return null;
 };
 
+// Mirrors the backend, which still decides: an ACTIVE fellowship whose end
+// date hasn't passed can have it changed.
+const canChangeEndDate = (f: GetFellowshipResponseDto): boolean =>
+  f.status === FellowshipStatus.ACTIVE &&
+  !!f.endDate &&
+  new Date(f.endDate).getTime() > Date.now();
+
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
 
@@ -167,6 +177,8 @@ const FellowshipsAdmin = () => {
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose "Change end date" dialog is open (admin-only action).
+  const [endDateFellowship, setEndDateFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose document-review dialog is open (download + approve/reject).
   const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
@@ -390,7 +402,22 @@ const FellowshipsAdmin = () => {
         }}
       >
         <Box sx={{ overflowX: 'auto' }}>
-          <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+          {/* min-content keeps every row as wide as the columns when the table
+              has to scroll, so row backgrounds and dividers span the full width. */}
+          <Box sx={{ minWidth: 'min-content' }}>
+            <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+            {fellowships.map((f) => (
+              <FellowshipRow
+                key={f.id}
+                fellowship={f}
+                onOpen={() => setProposalFellowship(f)}
+                onViewProposal={() => setProposalFellowship(f)}
+                onReviewDocuments={() => setDocumentsFellowship(f)}
+                onChangeEndDate={canChangeEndDate(f) ? () => setEndDateFellowship(f) : undefined}
+              />
+            ))}
+          </Box>
+          {/* Outside the min-content box so they stay centered in the visible area. */}
           {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
               <CircularProgress size={22} />
@@ -401,17 +428,7 @@ const FellowshipsAdmin = () => {
                 No fellowships match these filters.
               </Typography>
             </Box>
-          ) : (
-            fellowships.map((f) => (
-              <FellowshipRow
-                key={f.id}
-                fellowship={f}
-                onOpen={() => setProposalFellowship(f)}
-                onViewProposal={() => setProposalFellowship(f)}
-                onReviewDocuments={() => setDocumentsFellowship(f)}
-              />
-            ))
-          )}
+          ) : null}
         </Box>
         {totalRecords > 0 && fellowships.length > 0 && (
           <PaginationFooter
@@ -443,6 +460,16 @@ const FellowshipsAdmin = () => {
             </Button>
           ) : null
         }
+      />
+
+      <ChangeEndDateDialog
+        fellowship={endDateFellowship}
+        onClose={() => setEndDateFellowship(null)}
+        onSuccess={(msg) => {
+          setToast({ kind: 'success', msg });
+          setEndDateFellowship(null);
+        }}
+        onError={(msg) => setToast({ kind: 'error', msg })}
       />
 
       <StartContractDialog
@@ -555,11 +582,18 @@ const FilterPill = ({
 
 // ---- table header ----
 
-// Proportional columns so the row fills the width evenly instead of dumping all
-// slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
+// Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
+// Budget: minimums + gaps + row padding = 1112px. With the sidebar open the table
+// gets the window width minus 390px (260 sidebar, 2×64 page padding, 2 border), so
+// it fits from a 1502px window and scrolls below that. Fellow and Project truncate
+// with an ellipsis; the other minimums are their widest content plus a few px
+// ("Developer", "Starter Grant", "Nov 27, 2026" plus End date's edit pencil,
+// "$5000.00/mo" since payouts cap at $5000, and the compact "Docs approved" chip).
+// Project has the lowest minimum for its weight, so it takes all the slack up to
+// ~1210px of table; past that the other columns start growing by their weights too.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
-const COL_GAP = 2;
+  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(114px, 1fr) minmax(88px, 0.9fr) minmax(110px, 0.9fr) 200px';
+const COL_GAP = 1.25;
 
 const SortableHeader = ({
   label,
@@ -797,11 +831,14 @@ const FellowshipRow = ({
   onOpen,
   onViewProposal,
   onReviewDocuments,
+  onChangeEndDate,
 }: {
   fellowship: GetFellowshipResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
   onReviewDocuments: () => void;
+  // Only passed when the end date can still be changed.
+  onChangeEndDate?: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
@@ -858,10 +895,22 @@ const FellowshipRow = ({
           >
             {fellowship.userName ?? '—'}
           </Typography>
+          {/* Truncates like the name. Inline-block rather than block keeps the
+              row height it had as an inline span. */}
           {handleFor(fellowship) && (
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.7rem' }}
+              sx={{
+                display: 'inline-block',
+                maxWidth: '100%',
+                verticalAlign: 'bottom',
+                color: 'text.secondary',
+                fontFamily: fontFamilyMono,
+                fontSize: '0.7rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
             >
               {handleFor(fellowship)}
             </Typography>
@@ -922,15 +971,50 @@ const FellowshipRow = ({
       </Typography>
 
       {/* End date */}
-      <Typography
-        sx={{
-          fontFamily: fontFamilyMono,
-          fontSize: '0.78rem',
-          color: fellowship.endDate ? 'text.primary' : 'text.secondary',
-        }}
-      >
-        {formatDate(fellowship.endDate)}
-      </Typography>
+      <Box sx={{ minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Typography
+            sx={{
+              fontFamily: fontFamilyMono,
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              color: fellowship.endDate ? 'text.primary' : 'text.secondary',
+            }}
+          >
+            {formatDate(fellowship.endDate)}
+          </Typography>
+          {onChangeEndDate && (
+            <Tooltip title="Change end date">
+              <IconButton
+                size="small"
+                aria-label="Change end date"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChangeEndDate();
+                }}
+                sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'primary.light' } }}
+              >
+                <Pencil size={13} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+        {fellowship.originalEndDate && (
+          <Typography
+            variant="caption"
+            title="The contracted end date, before an admin changed it"
+            sx={{
+              display: 'block',
+              color: 'text.secondary',
+              fontFamily: fontFamilyMono,
+              fontSize: '0.7rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            was {formatDate(fellowship.originalEndDate)}
+          </Typography>
+        )}
+      </Box>
 
       {/* Payout */}
       <Typography
@@ -945,7 +1029,7 @@ const FellowshipRow = ({
 
       {/* Status */}
       <Box>
-        <StatusChip status={fellowship.status} />
+        <StatusChip status={fellowship.status} compact />
       </Box>
 
       {/* Actions */}

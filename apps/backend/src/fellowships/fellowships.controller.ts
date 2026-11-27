@@ -25,6 +25,7 @@ import {
 import { Response } from 'express';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import {
+    ChangeFellowshipEndDateDto,
     FellowshipSortBy,
     ListFellowshipsQueryDto,
     StartFellowshipContractDto,
@@ -68,6 +69,21 @@ export class FellowshipsController {
         @Body() body: StartFellowshipContractDto,
     ): Promise<FellowshipResponseDto> {
         return this.service.startContract(id, body);
+    }
+
+    @Patch(':id/end-date')
+    @ApiOperation({
+        summary: 'Change an active fellowship’s end date (admin)',
+        description:
+            'Earlier or later, up to 24 months from today. A date that has passed completes the fellowship now.',
+    })
+    @Roles(UserRole.ADMIN)
+    async changeEndDate(
+        @Param('id', new ParseUUIDPipe()) id: string,
+        @Body() body: ChangeFellowshipEndDateDto,
+        @GetUser() admin: User,
+    ): Promise<FellowshipResponseDto> {
+        return this.service.changeEndDate(id, body, admin);
     }
 
     @Get(':id/documents')
