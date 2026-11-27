@@ -1,13 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { EntityManager, LessThan } from 'typeorm';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { FellowshipResponseDto } from '@/fellowships/fellowships.response.dto';
 import { Fellowship } from '@/entities/fellowship.entity';
+import { User } from '@/entities/user.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { TaskType } from '@/task-processor/task.enums';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
+import { FellowDiscordRolesService } from '@/fellowships/fellow-discord-roles.service';
 import {
     FellowshipStatus,
     FellowshipType,
@@ -18,6 +20,10 @@ import {
 // after startDate, cannot be more than 24 months from today, and (now that
 // the backend no longer derives it from a duration) the submitted endDate is
 // what gets persisted verbatim.
+
+// Shared by every suite below; only the daily-job tests give it behaviour.
+const fellowDiscordRolesService = { syncFellowRoles: jest.fn() };
+
 describe('FellowshipsService — startContract', () => {
     let service: FellowshipsService;
 
@@ -67,6 +73,10 @@ describe('FellowshipsService — startContract', () => {
                 {
                     provide: DbTransactionService,
                     useValue: dbTransactionService,
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -127,6 +137,199 @@ describe('FellowshipsService — startContract', () => {
     });
 });
 
+// changeEndDate moves the end date of an ACTIVE contract that hasn't ended,
+// earlier or later. A date that has passed completes it now; every change is
+// recorded on the row.
+describe('FellowshipsService — changeEndDate', () => {
+    let service: FellowshipsService;
+
+    const now = new Date('2026-11-27T10:00:00Z');
+    const admin = { id: 'admin-1' } as User;
+
+    // A 6-month contract, running since June.
+    const running = {
+        id: 'fellowship-1',
+        status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-06-01T00:00:00Z'),
+        endDate: new Date('2026-12-01T00:00:00Z'),
+        originalEndDate: null,
+    };
+
+    const manager = { findOne: jest.fn(), update: jest.fn() };
+    const dbTransactionService = {
+        execute: jest.fn((fn: (m: EntityManager) => Promise<unknown>) =>
+            fn(manager as unknown as EntityManager),
+        ),
+    };
+    const fellowshipRepository = { findOneOrFail: jest.fn() };
+    const reloaded = {
+        ...running,
+        user: { id: 'user-1', displayName: 'Alice' },
+        application: { id: 'app-1' },
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+    };
+
+    beforeEach(async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                FellowshipsService,
+                {
+                    provide: getRepositoryToken(Fellowship),
+                    useValue: fellowshipRepository,
+                },
+                {
+                    provide: getRepositoryToken(APITask),
+                    useValue: { save: jest.fn() },
+                },
+                {
+                    provide: DbTransactionService,
+                    useValue: dbTransactionService,
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
+                },
+            ],
+        }).compile();
+
+        service = module.get(FellowshipsService);
+
+        dbTransactionService.execute.mockImplementation(
+            (fn: (m: EntityManager) => Promise<unknown>) =>
+                fn(manager as unknown as EntityManager),
+        );
+        manager.findOne.mockResolvedValue({ ...running });
+        fellowshipRepository.findOneOrFail.mockResolvedValue(reloaded);
+    });
+
+    afterEach(() => jest.resetAllMocks());
+
+    const change = (endDate: string) =>
+        service.changeEndDate('fellowship-1', { endDate }, admin, now);
+
+    it('shortens a running contract and keeps it ACTIVE until the new date', async () => {
+        const result = await change('2027-03-01');
+
+        expect(manager.findOne).toHaveBeenCalledWith(Fellowship, {
+            where: { id: 'fellowship-1' },
+            lock: { mode: 'pessimistic_write' },
+        });
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            {
+                endDate: new Date('2027-03-01'),
+                status: FellowshipStatus.ACTIVE,
+                originalEndDate: running.endDate,
+                endDateChangedBy: { id: 'admin-1' },
+                endDateChangedAt: now,
+            },
+        );
+        // The response is the row as re-read after the write.
+        expect(result.id).toBe('fellowship-1');
+        expect(fellowshipRepository.findOneOrFail).toHaveBeenCalled();
+    });
+
+    it('extends a contract up to 24 months from today', async () => {
+        await change('2028-11-27');
+
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            expect.objectContaining({
+                endDate: new Date('2028-11-27'),
+                status: FellowshipStatus.ACTIVE,
+            }),
+        );
+    });
+
+    it.each([
+        ['today', '2026-11-27'],
+        ['a past date (backdated)', '2026-10-15'],
+    ])(
+        'completes the fellowship now when the new end date is %s',
+        async (_, endDate) => {
+            await change(endDate);
+
+            expect(manager.update).toHaveBeenCalledWith(
+                Fellowship,
+                'fellowship-1',
+                expect.objectContaining({
+                    endDate: new Date(endDate),
+                    status: FellowshipStatus.COMPLETED,
+                }),
+            );
+        },
+    );
+
+    it('keeps the first contracted end date across later changes', async () => {
+        const firstContracted = new Date('2027-06-01T00:00:00Z');
+        manager.findOne.mockResolvedValue({
+            ...running,
+            originalEndDate: firstContracted,
+        });
+
+        await change('2027-03-01');
+
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            expect.objectContaining({ originalEndDate: firstContracted }),
+        );
+    });
+
+    it('returns 404 for an unknown fellowship', async () => {
+        manager.findOne.mockResolvedValue(null);
+
+        await expect(change('2027-03-01')).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+        expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [
+            'a fellowship that is not ACTIVE',
+            { status: FellowshipStatus.COMPLETED },
+            '2027-03-01',
+            'Only an active fellowship that hasn’t ended',
+        ],
+        [
+            'an ACTIVE fellowship whose end date has passed',
+            { endDate: new Date('2026-11-27T00:00:00Z') },
+            '2027-03-01',
+            'Only an active fellowship that hasn’t ended',
+        ],
+        [
+            'an end date on or before the start date',
+            {},
+            '2026-06-01',
+            'End date must be after start date',
+        ],
+        [
+            'an end date more than 24 months from today',
+            {},
+            '2028-11-28',
+            'End date cannot be more than 24 months from today',
+        ],
+        [
+            'the current end date',
+            {},
+            '2026-12-01',
+            'The fellowship already ends on that date',
+        ],
+    ])('returns 400 for %s', async (_, overrides, endDate, message) => {
+        manager.findOne.mockResolvedValue({ ...running, ...overrides });
+
+        const result = change(endDate);
+
+        await expect(result).rejects.toBeInstanceOf(BadRequestException);
+        await expect(result).rejects.toThrow(message);
+        expect(manager.update).not.toHaveBeenCalled();
+    });
+});
+
 describe('FellowshipsService — listPublicFellows', () => {
     let service: FellowshipsService;
 
@@ -138,6 +341,9 @@ describe('FellowshipsService — listPublicFellows', () => {
         type: FellowshipType.DEVELOPER,
         kind: FellowshipKind.STARTER_GRANT,
         status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-02-01T00:00:00.000Z'),
+        endDate: new Date('2026-08-01T00:00:00.000Z'),
+        amountUsd: '6000.00',
         createdAt: new Date('2026-01-01'),
         updatedAt: new Date('2026-01-01'),
         user: {
@@ -150,6 +356,8 @@ describe('FellowshipsService — listPublicFellows', () => {
         application: {
             id: 'app-1',
             type: FellowshipType.DESIGNER,
+            github: 'alice-dev',
+            title: 'Proposal title',
             projectName: 'Project',
             projectGithubLink: 'https://github.com/alice/project',
             mentorContact: 'mentor@example.com',
@@ -179,6 +387,10 @@ describe('FellowshipsService — listPublicFellows', () => {
                 {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -213,13 +425,62 @@ describe('FellowshipsService — listPublicFellows', () => {
         expect({ ...result.records[0] }).toStrictEqual({
             id: fellowship.id,
             displayName: fellowship.user.displayName,
-            githubProfileUrl: fellowship.user.githubProfileUrl,
+            // The profile URL wins over the application's older handle.
+            githubUsername: 'alice',
+            githubProfileUrl: 'https://github.com/alice',
             projectName: fellowship.application.projectName,
             projectGithubLink: fellowship.application.projectGithubLink,
             type: fellowship.type,
             kind: fellowship.kind,
+            startDate: '2026-02-01T00:00:00.000Z',
+            endDate: '2026-08-01T00:00:00.000Z',
         });
     });
+
+    it('passes a missing project name through as null, without falling back to the proposal title', async () => {
+        const noProject = {
+            ...fellowship,
+            application: { ...fellowship.application, projectName: null },
+        };
+        fellowshipRepository.findAndCount.mockResolvedValue([[noProject], 1]);
+
+        const result = await service.listPublicFellows({
+            page: 0,
+            pageSize: 20,
+        });
+
+        expect(result.records[0].projectName).toBeNull();
+    });
+
+    // githubUsername and githubProfileUrl must always name the same account.
+    it.each([
+        // [profile URL, application handle, expected username]
+        ['https://GitHub.com/Alice/', 'alice-dev', 'Alice'],
+        ['https://github.com/alice/project', 'alice-dev', 'alice-dev'],
+        [null, 'alice-dev', 'alice-dev'],
+        ['https://gitlab.com/alice', null, null],
+        [null, null, null],
+    ])(
+        'derives one GitHub identity from profile %s and handle %s',
+        async (githubProfileUrl, github, expected) => {
+            const row = {
+                ...fellowship,
+                user: { ...fellowship.user, githubProfileUrl },
+                application: { ...fellowship.application, github },
+            };
+            fellowshipRepository.findAndCount.mockResolvedValue([[row], 1]);
+
+            const result = await service.listPublicFellows({
+                page: 0,
+                pageSize: 20,
+            });
+
+            expect(result.records[0].githubUsername).toBe(expected);
+            expect(result.records[0].githubProfileUrl).toBe(
+                expected ? `https://github.com/${expected}` : null,
+            );
+        },
+    );
 });
 
 describe('FellowshipsService — completeEndedFellowships', () => {
@@ -245,6 +506,10 @@ describe('FellowshipsService — completeEndedFellowships', () => {
                 {
                     provide: DbTransactionService,
                     useValue: { execute: jest.fn() },
+                },
+                {
+                    provide: FellowDiscordRolesService,
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
@@ -318,6 +583,29 @@ describe('FellowshipsService — completeEndedFellowships', () => {
     });
 
     describe('handleCompleteEndedFellowships', () => {
+        beforeEach(() => {
+            fellowDiscordRolesService.syncFellowRoles.mockResolvedValue(
+                undefined,
+            );
+        });
+
+        it('syncs fellow Discord roles after the sweep', async () => {
+            const order: string[] = [];
+            fellowshipRepository.update.mockImplementation(async () => {
+                order.push('sweep');
+                return { affected: 1 };
+            });
+            fellowDiscordRolesService.syncFellowRoles.mockImplementation(
+                async () => {
+                    order.push('roles');
+                },
+            );
+
+            await service.handleCompleteEndedFellowships(task(0));
+
+            expect(order).toEqual(['sweep', 'roles']);
+        });
+
         it('sweeps, then queues exactly one next run', async () => {
             jest.useFakeTimers().setSystemTime(
                 new Date('2026-11-16T04:00:05Z'),

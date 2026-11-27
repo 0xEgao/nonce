@@ -13,6 +13,7 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs, { Dayjs } from 'dayjs';
 import { useStartFellowshipContract } from '../../hooks/fellowshipHooks';
+import { MAX_CONTRACT_MONTHS } from './contractDates';
 import type { GetFellowshipResponseDto } from '../../types/fellowship';
 import { extractErrorMessage } from '../../utils/errorUtils';
 
@@ -25,8 +26,6 @@ type Props = {
 
 // Mirrors @Max(5000) on StartFellowshipContractDto in the backend.
 const MAX_AMOUNT_USD = 5000;
-// Mirrors the backend's 24-month cap on the contract end date.
-const MAX_MONTHS = 24;
 
 // Field-level validators return the error to show, or null. They run on every
 // keystroke so mistakes surface immediately, not on submit.
@@ -56,8 +55,8 @@ const StartContractDialog = ({ fellowship, onClose, onSuccess, onError }: Props)
       ? 'Enter a valid date.'
       : startDate && startDate.isValid() && !endDate.isAfter(startDate)
         ? 'End date must be after start date.'
-        : endDate.isAfter(dayjs().add(MAX_MONTHS, 'month'), 'day')
-          ? `End date cannot be more than ${MAX_MONTHS} months from today.`
+        : endDate.isAfter(dayjs().add(MAX_CONTRACT_MONTHS, 'month'), 'day')
+          ? `End date cannot be more than ${MAX_CONTRACT_MONTHS} months from today.`
           : null;
 
   const canSubmit =

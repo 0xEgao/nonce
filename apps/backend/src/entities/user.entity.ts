@@ -20,15 +20,16 @@ import { CohortMembership } from '@/entities/cohort-membership.entity';
 // Admin list endpoints search these columns with ILIKE '%term%' -- the first four
 // through the shared free-text search, `location` through the user pool's city
 // filter. A leading wildcard rules out B-tree, so in the database these are
-// pg_trgm GIN indexes -- see the follow-up migrations that swap them. TypeORM
-// cannot express an operator class, so they are declared plain here; its schema
-// diff compares name, columns and uniqueness but never the access method, so the
-// swap sticks.
-@Index(['name'])
-@Index(['email'])
-@Index(['discordUserName'])
-@Index(['discordGlobalName'])
-@Index(['location'])
+// pg_trgm GIN indexes -- see the follow-up migrations that swap them. Since 1.x
+// TypeORM's schema diff compares the access method, so `type: 'gin'` is what
+// stops it turning them back into B-trees. It cannot express the operator class
+// (gin_trgm_ops), though, so only the migrations can create these: a CREATE from
+// TypeORM itself (synchronize on an unmigrated database) would fail.
+@Index(['name'], { type: 'gin' })
+@Index(['email'], { type: 'gin' })
+@Index(['discordUserName'], { type: 'gin' })
+@Index(['discordGlobalName'], { type: 'gin' })
+@Index(['location'], { type: 'gin' })
 export class User extends BaseEntity {
     @PrimaryGeneratedColumn('uuid')
     id!: string;

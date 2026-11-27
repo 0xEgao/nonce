@@ -7,11 +7,11 @@
     "assets": [
       {
         "include": "../config/*",
-        "outDir": "./dist/src/config"
+        "outDir": "./dist/src"
       },
       {
         "include": "../assets/**/*",
-        "outDir": "./dist/src/assets"
+        "outDir": "./dist/src"
       }
     ],
     "plugins": [

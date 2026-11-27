@@ -215,3 +215,59 @@ export enum CIRunConclusion {
   TIMED_OUT = 'TIMED_OUT',
   STARTUP_FAILURE = 'STARTUP_FAILURE',
 }
+
+// --- Newsletter ------------------------------------------------------------
+
+// Global state of one email address, across every list. Anything but ACTIVE
+// suppresses the address from every send, whatever its list rows say.
+export enum SubscriberStatus {
+  ACTIVE = 'ACTIVE',
+  UNSUBSCRIBED = 'UNSUBSCRIBED',
+  BOUNCED = 'BOUNCED',
+}
+
+// Per list. PENDING is a public sign-up still waiting on its confirmation link.
+export enum SubscriptionStatus {
+  PENDING = 'PENDING',
+  SUBSCRIBED = 'SUBSCRIBED',
+  UNSUBSCRIBED = 'UNSUBSCRIBED',
+}
+
+export enum SubscriptionSource {
+  PUBLIC_FORM = 'PUBLIC_FORM',
+  PROFILE = 'PROFILE',
+  ADMIN = 'ADMIN',
+  PORTAL_USERS = 'PORTAL_USERS',
+}
+
+export enum NewsletterStatus {
+  DRAFT = 'DRAFT',
+  SCHEDULED = 'SCHEDULED',
+  SENDING = 'SENDING',
+  SENT = 'SENT',
+  CANCELLED = 'CANCELLED',
+}
+
+// RICH_TEXT is the editor's HTML fragment, wrapped in the Bitshala layout at
+// send time. HTML is a complete document, sent as written.
+export enum NewsletterContentFormat {
+  RICH_TEXT = 'RICH_TEXT',
+  HTML = 'HTML',
+}
+
+export enum NewsletterDeliveryStatus {
+  PENDING = 'PENDING',
+  SENDING = 'SENDING',
+  SENT = 'SENT',
+  FAILED = 'FAILED',
+  SKIPPED = 'SKIPPED',
+}
+
+// Which portal users an admin copies into a mailing list.
+export enum PortalAudience {
+  ALL_USERS = 'ALL_USERS',
+  COHORT_MEMBERS = 'COHORT_MEMBERS',
+  COHORT_TYPE_MEMBERS = 'COHORT_TYPE_MEMBERS',
+  WAITLIST = 'WAITLIST',
+  FELLOWS = 'FELLOWS',
+}

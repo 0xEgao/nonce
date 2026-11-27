@@ -384,3 +384,86 @@ describe('SubmissionsService — saving drafts', () => {
         expect(drafted()).toBe(FILES_THAT_FIT);
     });
 });
+
+describe('SubmissionsService — listing the tree', () => {
+    // bpd-week-3's shape: a protected corpus larger than the listing cap,
+    // sorted ahead of files the student has to edit.
+    const corpus = Array.from({ length: 2500 }, (_, i) => ({
+        path: `mempool/${String(i).padStart(4, '0')}.json`,
+        type: 'blob',
+        sha: `m${i}`,
+        size: 1,
+    }));
+    const entries = [
+        { path: 'javascript/index.js', type: 'blob', sha: 'j', size: 1 },
+        { path: 'mempool', type: 'tree', sha: 'm', size: null },
+        ...corpus,
+        { path: 'python/main.py', type: 'blob', sha: 'p', size: 1 },
+        { path: 'run.sh', type: 'blob', sha: 'r', size: 1 },
+    ];
+
+    it('drops only protected files when the tree is over the cap', async () => {
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                SubmissionsService,
+                {
+                    provide: getRepositoryToken(AssignmentSubmission),
+                    useValue: {},
+                },
+                {
+                    provide: GitHubAppClient,
+                    useValue: {
+                        getCommit: jest.fn(async () => ({ treeSha: 'tree' })),
+                        getTree: jest.fn(async () => ({
+                            sha: 'tree',
+                            truncated: false,
+                            entries,
+                        })),
+                    },
+                },
+                {
+                    provide: AssignmentsService,
+                    useValue: {
+                        resolveSubmissionForViewer: jest.fn(async () =>
+                            Object.assign(new AssignmentSubmission(), {
+                                id: 'submission-1',
+                                repoOwner: 'org',
+                                repoName: 'repo',
+                                defaultBranch: 'main',
+                                provisionStatus: ProvisionStatus.READY,
+                                assignment: Object.assign(new Assignment(), {
+                                    protectedPaths: ['mempool/**'],
+                                }),
+                            }),
+                        ),
+                    },
+                },
+                { provide: ExerciseScoreWritebackService, useValue: {} },
+                { provide: DbTransactionService, useValue: {} },
+                {
+                    provide: CACHE_MANAGER,
+                    useValue: {
+                        get: jest.fn(async () => undefined),
+                        set: jest.fn(async () => undefined),
+                    },
+                },
+            ],
+        }).compile();
+        const service = module.get(SubmissionsService);
+
+        const tree = await service.getTree('submission-1', 'a'.repeat(40), {
+            id: 'student-1',
+        } as User);
+        const paths = tree.entries.map((entry) => entry.path);
+
+        expect(tree.truncated).toBe(true);
+        expect(paths).toHaveLength(2000);
+        expect(paths).toEqual(
+            expect.arrayContaining([
+                'javascript/index.js',
+                'python/main.py',
+                'run.sh',
+            ]),
+        );
+    });
+});

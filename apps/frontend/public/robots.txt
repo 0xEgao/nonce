@@ -10,6 +10,7 @@ Allow: /ln-instructions
 Allow: /bpd-instructions
 Allow: /pb-instructions
 Allow: /bbr-instructions
+Allow: /newsletter/subscribe
 
 # Leaderboards are publicly viewable but deliberately not indexed: they carry
 # individual Discord handles and scores, and being shareable by link is a
@@ -27,5 +28,12 @@ Disallow: /me
 Disallow: /cohortfeedback
 Disallow: /login
 Disallow: /unauthorized
+
+# Newsletter email-link targets: each URL carries a subscriber's token, so none
+# of them should ever be crawled. The embed is the subscribe form in an iframe.
+Disallow: /newsletter/confirm
+Disallow: /newsletter/unsubscribe
+Disallow: /newsletter/preferences
+Disallow: /embed/
 
 Sitemap: https://app.bitshala.org/sitemap.xml

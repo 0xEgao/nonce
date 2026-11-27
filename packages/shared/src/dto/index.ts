@@ -4,3 +4,4 @@
 export * from './common';
 export * from './cohorts';
 export * from './assignments';
+export * from './newsletter';

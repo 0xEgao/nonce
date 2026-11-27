@@ -20,7 +20,7 @@ to see its full history.
 
 ## Prerequisites
 
-- Node.js >= 20.12 and npm
+- Node.js 22.22.3+ or 24.15+ (the `engines` range in `package.json`) and npm
 - Docker (for Postgres, Redis, and Mailcrab)
 
 ## Setup
@@ -165,6 +165,25 @@ package without warning. `multer` and `js-yaml` are pinned there for security.
 error (`TS2420`) rather than something the frontend discovers at runtime. Only
 wire shapes belong in shared — frontend render models (e.g.
 `apps/frontend/src/types/instructions.ts`) stay in the frontend.
+
+**Newsletters are paced on purpose.** Google Workspace SMTP allows 2,000
+messages a day per user (10,000 through `smtp-relay.gmail.com`), so
+`apps/backend/src/newsletter` sends in small batches at
+`email.newsletter.ratePerMinute`, stops at `dailyLimit` per rolling 24 hours and
+resumes by itself. A large send can therefore take more than a day; that is the
+design, not a stuck task. Give newsletters their own sender account
+(`email.newsletter.smtp` / `from`) so a quota hit cannot block transactional
+mail, and make sure the sending domain has SPF, DKIM and DMARC.
+
+**`juice` is ESM-only.** Node loads it fine, Jest 29 does not: a spec that
+imports the newsletter render service (directly or through `NewsletterModule`)
+needs the `jest.mock('juice', ...)` line from
+`newsletter-render.service.spec.ts`.
+
+**Quote table names in update/delete query-builder fragments.** There TypeORM
+rewrites any bare word that matches a property of the entity, so
+`FROM subscriber s` inside an update of `NewsletterDelivery` became
+`FROM "subscriberId" s`. Unit tests with mocked builders cannot catch this.
 
 ## Known backlog
 

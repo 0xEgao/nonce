@@ -104,6 +104,17 @@ class DiscordRolesConfig {
 
     @IsNumberString({ no_symbols: true })
     alumniBuildingBitcoinInRust: string;
+
+    // Fellow roles, one per FellowshipType, granted once a contract starts and
+    // removed when it ends, by the daily fellowship job.
+    @IsNumberString({ no_symbols: true })
+    devFellow: string;
+
+    @IsNumberString({ no_symbols: true })
+    eduFellow: string;
+
+    @IsNumberString({ no_symbols: true })
+    designFellow: string;
 }
 
 class DiscordInviteUrlsConfig {
@@ -358,6 +369,80 @@ class GoogleDriveConfig {
     rootFolderId?: string;
 }
 
+// A separate SMTP account for newsletters, so a bulk send that hits the
+// provider's daily quota (or gets the account throttled) cannot take
+// transactional mail down with it. Blank keys fall back to `email.smtp`.
+class NewsletterSmtpConfig {
+    @IsOptional()
+    @IsString()
+    host?: string | null;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    @Max(65535)
+    port?: number | null;
+
+    @IsOptional()
+    @IsBoolean()
+    secure?: boolean | null;
+
+    @IsOptional()
+    @IsString()
+    user?: string | null;
+
+    @IsOptional()
+    @IsString()
+    pass?: string | null;
+}
+
+// Blank keys fall back to `email.from`.
+class NewsletterFromIdentity {
+    @IsOptional()
+    @IsEmail()
+    email?: string | null;
+
+    @IsOptional()
+    @IsString()
+    name?: string | null;
+}
+
+// Every key is optional, and the whole block may be absent: deployments that
+// predate newsletters have no `email.newsletter`. Read it with
+// `configService.get` and fall back in code, never `getOrThrow`.
+class NewsletterConfig {
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => NewsletterSmtpConfig)
+    smtp?: NewsletterSmtpConfig | null;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => NewsletterFromIdentity)
+    from?: NewsletterFromIdentity | null;
+
+    // Default Reply-To; a newsletter can override it.
+    @IsOptional()
+    @IsEmail()
+    replyTo?: string | null;
+
+    // Newsletter emails per rolling 24h, across every newsletter.
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    dailyLimit?: number | null;
+
+    @IsOptional()
+    @IsInt()
+    @Min(1)
+    ratePerMinute?: number | null;
+
+    // Shown in the footer when set.
+    @IsOptional()
+    @IsString()
+    postalAddress?: string | null;
+}
+
 class MailConfig {
     @IsDefined()
     @ValidateNested()
@@ -368,6 +453,11 @@ class MailConfig {
     @ValidateNested()
     @Type(() => MailFromIdentity)
     from: MailFromIdentity;
+
+    @IsOptional()
+    @ValidateNested()
+    @Type(() => NewsletterConfig)
+    newsletter?: NewsletterConfig | null;
 }
 
 // MaxMind GeoLite2 City, used to prefill a user's location from their IP.

@@ -16,4 +16,6 @@ export enum MailTemplate {
     FellowshipReportReminder = 'fellowship-report-reminder',
     FellowshipReportApproved = 'fellowship-report-approved',
     FellowshipReportRejected = 'fellowship-report-rejected',
+    NewsletterSubscriptionConfirmation = 'newsletter-subscription-confirmation',
+    NewsletterPreferencesLink = 'newsletter-preferences-link',
 }

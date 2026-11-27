@@ -55,6 +55,15 @@ const FellowshipsAdmin = lazy(() => import('./pages/fellowship/admin/Fellowships
 const ReportsAdmin = lazy(() => import('./pages/fellowship/admin/ReportsAdmin.tsx'));
 const UsersAdmin = lazy(() => import('./pages/admin/users/UsersAdmin.tsx'));
 const UserOverview = lazy(() => import('./pages/admin/users/UserOverview.tsx'));
+const NewslettersAdmin = lazy(() => import('./pages/admin/newsletter/NewslettersAdmin.tsx'));
+const NewsletterDetail = lazy(() => import('./pages/admin/newsletter/NewsletterDetail.tsx'));
+const MailingListsAdmin = lazy(() => import('./pages/admin/newsletter/MailingListsAdmin.tsx'));
+const MailingListDetail = lazy(() => import('./pages/admin/newsletter/MailingListDetail.tsx'));
+const SubscribersAdmin = lazy(() => import('./pages/admin/newsletter/SubscribersAdmin.tsx'));
+const NewsletterSubscribe = lazy(() => import('./pages/newsletter/Subscribe.tsx'));
+const NewsletterConfirm = lazy(() => import('./pages/newsletter/Confirm.tsx'));
+const NewsletterUnsubscribe = lazy(() => import('./pages/newsletter/Unsubscribe.tsx'));
+const NewsletterPreferences = lazy(() => import('./pages/newsletter/Preferences.tsx'));
 
 const FellowshipFallback = () => (
   <Box
@@ -326,6 +335,85 @@ const routes = [
             {withFellowshipFallback(<UserOverview />)}
           </ProtectedRoute>
         </Layout>
+      ),
+    },
+    {
+      path: '/admin/newsletter',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<NewslettersAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      path: '/admin/newsletter/lists',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<MailingListsAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      path: '/admin/newsletter/lists/:listId',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<MailingListDetail />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      path: '/admin/newsletter/subscribers',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<SubscribersAdmin />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      // Static siblings (lists, subscribers) outrank this param route.
+      path: '/admin/newsletter/:newsletterId',
+      element: (
+        <Layout>
+          <ProtectedRoute requiredRole={[UserRole.ADMIN]}>
+            {withFellowshipFallback(<NewsletterDetail />)}
+          </ProtectedRoute>
+        </Layout>
+      ),
+    },
+    {
+      // Public sign-up form; also served chromeless at /embed/newsletter.
+      path: '/newsletter/subscribe',
+      element: <Layout><NewsletterSubscribe /></Layout>,
+    },
+    {
+      // Email link targets. The token in the query string is the only
+      // credential, so none of these need a session.
+      path: '/newsletter/confirm',
+      element: <Layout><NewsletterConfirm /></Layout>,
+    },
+    {
+      path: '/newsletter/unsubscribe',
+      element: <Layout><NewsletterUnsubscribe /></Layout>,
+    },
+    {
+      path: '/newsletter/preferences',
+      element: <Layout><NewsletterPreferences /></Layout>,
+    },
+    {
+      // Iframed on bitshala.org — no Layout, no sidebar, transparent while loading.
+      path: '/embed/newsletter',
+      element: (
+        <Suspense fallback={null}>
+          <NewsletterSubscribe embed />
+        </Suspense>
       ),
     },
     {

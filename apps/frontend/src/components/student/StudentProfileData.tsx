@@ -25,6 +25,7 @@ import {
   type LocationParts,
 } from '@nonce/shared';
 import LocationFields from '../location/LocationFields';
+import EmailPreferencesSection from '../newsletter/public/EmailPreferencesSection';
 import {
   locationProblemErrors,
   locationProblemField,
@@ -662,6 +663,11 @@ const StudentProfileData: React.FC = () => {
               {isUpdating ? 'Updating...' : 'Update Profile'}
             </Button>
           </Box>
+        </Box>
+
+        {/* Outside the form: its button must not submit the profile. */}
+        <Box sx={{ mt: 3 }}>
+          <EmailPreferencesSection />
         </Box>
       </Box>
 

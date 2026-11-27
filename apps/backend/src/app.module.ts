@@ -33,6 +33,7 @@ import { FellowshipApplicationsModule } from '@/fellowship-applications/fellowsh
 import { FellowshipsModule } from '@/fellowships/fellowships.module';
 import { FellowshipReportsModule } from '@/fellowship-reports/fellowship-reports.module';
 import { AssignmentsModule } from '@/assignments/assignments.module';
+import { NewsletterModule } from '@/newsletter/newsletter.module';
 
 @Module({
     imports: [
@@ -97,6 +98,7 @@ import { AssignmentsModule } from '@/assignments/assignments.module';
         FellowshipsModule,
         FellowshipReportsModule,
         AssignmentsModule,
+        NewsletterModule,
     ],
     controllers: [AppController],
     providers: [
