@@ -1,5 +1,4 @@
-import { startTransition, useEffect, useMemo, useOptimistic, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
@@ -14,6 +13,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -22,22 +22,19 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  Pencil,
   PlayCircle,
   Search,
 } from 'lucide-react';
+import ChangeEndDateDialog from '../../../components/fellowship/ChangeEndDateDialog';
 import DocumentList from '../../../components/fellowship/DocumentList';
-import EndFellowshipDialog from '../../../components/fellowship/EndFellowshipDialog';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
 import StartContractDialog from '../../../components/fellowship/StartContractDialog';
 import StatusChip from '../../../components/fellowship/StatusChip';
 import { fontFamilyMono } from '../../../components/fellowship/theme';
 import { formatCohortDate } from '../../../helpers/cohortHelpers';
-import {
-  useEndFellowship,
-  useFellowshipDocuments,
-  useFellowships,
-} from '../../../hooks/fellowshipHooks';
+import { useFellowshipDocuments, useFellowships } from '../../../hooks/fellowshipHooks';
 import { useDebounce } from '../../../hooks/useDebounce';
 import { useFellowshipProjectTitle } from '../../../hooks/useFellowshipProjectTitle';
 import fellowshipService from '../../../services/fellowshipService';
@@ -143,17 +140,12 @@ const handleFor = (f: GetFellowshipResponseDto): string | null => {
   return null;
 };
 
-// Mirrors the backend's end endpoint: ACTIVE, started, endDate still ahead.
-const isRunning = (f: GetFellowshipResponseDto): boolean => {
-  const now = Date.now();
-  return (
-    f.status === FellowshipStatus.ACTIVE &&
-    !!f.startDate &&
-    new Date(f.startDate).getTime() <= now &&
-    !!f.endDate &&
-    new Date(f.endDate).getTime() > now
-  );
-};
+// Mirrors the backend, which still decides: an ACTIVE fellowship whose end
+// date hasn't passed can have it changed.
+const canChangeEndDate = (f: GetFellowshipResponseDto): boolean =>
+  f.status === FellowshipStatus.ACTIVE &&
+  !!f.endDate &&
+  new Date(f.endDate).getTime() > Date.now();
 
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
@@ -185,8 +177,8 @@ const FellowshipsAdmin = () => {
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
-  // Fellowship whose "End fellowship" confirmation is open.
-  const [endingFellowship, setEndingFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose "Change end date" dialog is open (admin-only action).
+  const [endDateFellowship, setEndDateFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose document-review dialog is open (download + approve/reject).
   const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
@@ -216,33 +208,6 @@ const FellowshipsAdmin = () => {
 
   // The server returns the page already filtered/searched/sorted (nulls last).
   const fellowships = useMemo(() => data?.records ?? [], [data?.records]);
-
-  // Optimistic UI: an ended row shows as Completed at once. React drops this
-  // overlay when the transition below finishes, by which time the list has
-  // been refetched: the real state replaces it on success or on failure.
-  const [shownFellowships, showEnded] = useOptimistic(fellowships, (list, id: string) =>
-    list.map((f) =>
-      f.id === id
-        ? { ...f, status: FellowshipStatus.COMPLETED, endDate: new Date().toISOString() }
-        : f,
-    ),
-  );
-  const queryClient = useQueryClient();
-  const endMut = useEndFellowship();
-  const endFellowship = (f: GetFellowshipResponseDto) => {
-    setEndingFellowship(null);
-    startTransition(async () => {
-      showEnded(f.id);
-      try {
-        await endMut.mutateAsync({ id: f.id });
-        setToast({ kind: 'success', msg: `Ended ${f.userName ?? f.userEmail ?? 'the fellow'}'s fellowship.` });
-      } catch (e) {
-        setToast({ kind: 'error', msg: extractErrorMessage(e) });
-        // The row may have changed meanwhile (e.g. the daily sweep completed it).
-        await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
-      }
-    });
-  };
   const totalRecords = data?.totalRecords ?? 0;
   const pageCount = Math.max(1, Math.ceil(totalRecords / pageSize));
 
@@ -449,14 +414,14 @@ const FellowshipsAdmin = () => {
               </Typography>
             </Box>
           ) : (
-            shownFellowships.map((f) => (
+            fellowships.map((f) => (
               <FellowshipRow
                 key={f.id}
                 fellowship={f}
                 onOpen={() => setProposalFellowship(f)}
                 onViewProposal={() => setProposalFellowship(f)}
                 onReviewDocuments={() => setDocumentsFellowship(f)}
-                onEnd={isRunning(f) ? () => setEndingFellowship(f) : undefined}
+                onChangeEndDate={canChangeEndDate(f) ? () => setEndDateFellowship(f) : undefined}
               />
             ))
           )}
@@ -493,10 +458,14 @@ const FellowshipsAdmin = () => {
         }
       />
 
-      <EndFellowshipDialog
-        fellowship={endingFellowship}
-        onClose={() => setEndingFellowship(null)}
-        onConfirm={endFellowship}
+      <ChangeEndDateDialog
+        fellowship={endDateFellowship}
+        onClose={() => setEndDateFellowship(null)}
+        onSuccess={(msg) => {
+          setToast({ kind: 'success', msg });
+          setEndDateFellowship(null);
+        }}
+        onError={(msg) => setToast({ kind: 'error', msg })}
       />
 
       <StartContractDialog
@@ -611,9 +580,8 @@ const FilterPill = ({
 
 // Proportional columns so the row fills the width evenly instead of dumping all
 // slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
-// Actions fits its widest set: View docs + Proposal + End.
 const COLS =
-  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 216px';
+  'minmax(180px, 1.6fr) minmax(90px, 0.7fr) minmax(96px, 0.8fr) minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) minmax(90px, 0.9fr) minmax(100px, 0.9fr) 200px';
 const COL_GAP = 2;
 
 const SortableHeader = ({
@@ -804,12 +772,10 @@ const docsAction = (status: FellowshipStatus): { label: string; emphasis: boolea
 const RowActionButton = ({
   label,
   emphasis = false,
-  danger = false,
   onClick,
 }: {
   label: string;
   emphasis?: boolean;
-  danger?: boolean;
   onClick: () => void;
 }) => (
   <Button
@@ -827,13 +793,7 @@ const RowActionButton = ({
       fontSize: '0.75rem',
       lineHeight: 1.4,
       whiteSpace: 'nowrap',
-      ...(danger
-        ? {
-            color: 'error.light',
-            borderColor: 'rgba(244,67,54,0.5)',
-            '&:hover': { bgcolor: 'rgba(244,67,54,0.12)', borderColor: 'error.main' },
-          }
-        : emphasis
+      ...(emphasis
         ? {
             color: 'primary.light',
             borderColor: 'rgba(249,115,22,0.5)',
@@ -860,14 +820,14 @@ const FellowshipRow = ({
   onOpen,
   onViewProposal,
   onReviewDocuments,
-  onEnd,
+  onChangeEndDate,
 }: {
   fellowship: GetFellowshipResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
   onReviewDocuments: () => void;
-  // Only passed for running contracts, the one state the backend can end.
-  onEnd?: () => void;
+  // Only passed when the end date can still be changed.
+  onChangeEndDate?: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
@@ -988,15 +948,50 @@ const FellowshipRow = ({
       </Typography>
 
       {/* End date */}
-      <Typography
-        sx={{
-          fontFamily: fontFamilyMono,
-          fontSize: '0.78rem',
-          color: fellowship.endDate ? 'text.primary' : 'text.secondary',
-        }}
-      >
-        {formatDate(fellowship.endDate)}
-      </Typography>
+      <Box sx={{ minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Typography
+            sx={{
+              fontFamily: fontFamilyMono,
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              color: fellowship.endDate ? 'text.primary' : 'text.secondary',
+            }}
+          >
+            {formatDate(fellowship.endDate)}
+          </Typography>
+          {onChangeEndDate && (
+            <Tooltip title="Change end date">
+              <IconButton
+                size="small"
+                aria-label="Change end date"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChangeEndDate();
+                }}
+                sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'primary.light' } }}
+              >
+                <Pencil size={13} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+        {fellowship.originalEndDate && (
+          <Typography
+            variant="caption"
+            title="The contracted end date, before an admin changed it"
+            sx={{
+              display: 'block',
+              color: 'text.secondary',
+              fontFamily: fontFamilyMono,
+              fontSize: '0.7rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            was {formatDate(fellowship.originalEndDate)}
+          </Typography>
+        )}
+      </Box>
 
       {/* Payout */}
       <Typography
@@ -1018,7 +1013,6 @@ const FellowshipRow = ({
       <Stack direction="row" spacing={0.75} alignItems="center">
         <RowActionButton label={docs.label} emphasis={docs.emphasis} onClick={onReviewDocuments} />
         <RowActionButton label="Proposal" onClick={onViewProposal} />
-        {onEnd && <RowActionButton label="End" danger onClick={onEnd} />}
       </Stack>
     </Box>
   );

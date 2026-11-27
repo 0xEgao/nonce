@@ -296,6 +296,8 @@ export interface GetFellowshipResponseDto extends FellowshipOnboardingDto {
   status: FellowshipStatus;
   startDate: string | null;
   endDate: string | null;
+  // The contracted end date if an admin has since changed endDate, else null.
+  originalEndDate: string | null;
   amountUsd: string | null;
   createdAt: string;
   updatedAt: string;
@@ -318,6 +320,10 @@ export interface StartFellowshipContractRequestDto {
   startDate: string;
   endDate: string;
   amountUsd: number;
+}
+
+export interface ChangeFellowshipEndDateRequestDto {
+  endDate: string;
 }
 
 // =========================

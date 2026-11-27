@@ -1,10 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException } from '@nestjs/common';
-import { EntityManager, LessThan, LessThanOrEqual, MoreThan } from 'typeorm';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { EntityManager, LessThan } from 'typeorm';
 import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { FellowshipResponseDto } from '@/fellowships/fellowships.response.dto';
 import { Fellowship } from '@/entities/fellowship.entity';
+import { User } from '@/entities/user.entity';
 import { APITask } from '@/entities/api-task.entity';
 import { TaskType } from '@/task-processor/task.enums';
 import { DbTransactionService } from '@/db-transaction/db-transaction.service';
@@ -136,13 +137,38 @@ describe('FellowshipsService — startContract', () => {
     });
 });
 
-// Ending early is one conditional UPDATE: only a running ACTIVE contract
-// (started, endDate still ahead) matches, and anything else is a 400.
-describe('FellowshipsService — endFellowshipEarly', () => {
+// changeEndDate moves the end date of an ACTIVE contract that hasn't ended,
+// earlier or later. A date that has passed completes it now; every change is
+// recorded on the row.
+describe('FellowshipsService — changeEndDate', () => {
     let service: FellowshipsService;
 
-    const now = new Date('2026-11-23T10:00:00Z');
-    const fellowshipRepository = { update: jest.fn(), existsBy: jest.fn() };
+    const now = new Date('2026-11-27T10:00:00Z');
+    const admin = { id: 'admin-1' } as User;
+
+    // A 6-month contract, running since June.
+    const running = {
+        id: 'fellowship-1',
+        status: FellowshipStatus.ACTIVE,
+        startDate: new Date('2026-06-01T00:00:00Z'),
+        endDate: new Date('2026-12-01T00:00:00Z'),
+        originalEndDate: null,
+    };
+
+    const manager = { findOne: jest.fn(), update: jest.fn() };
+    const dbTransactionService = {
+        execute: jest.fn((fn: (m: EntityManager) => Promise<unknown>) =>
+            fn(manager as unknown as EntityManager),
+        ),
+    };
+    const fellowshipRepository = { findOneOrFail: jest.fn() };
+    const reloaded = {
+        ...running,
+        user: { id: 'user-1', displayName: 'Alice' },
+        application: { id: 'app-1' },
+        createdAt: new Date('2026-01-01'),
+        updatedAt: new Date('2026-01-01'),
+    };
 
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
@@ -158,52 +184,149 @@ describe('FellowshipsService — endFellowshipEarly', () => {
                 },
                 {
                     provide: DbTransactionService,
-                    useValue: { execute: jest.fn() },
+                    useValue: dbTransactionService,
                 },
                 {
                     provide: FellowDiscordRolesService,
-                    useValue: { syncFellowRoles: jest.fn() },
+                    useValue: fellowDiscordRolesService,
                 },
             ],
         }).compile();
 
         service = module.get(FellowshipsService);
+
+        dbTransactionService.execute.mockImplementation(
+            (fn: (m: EntityManager) => Promise<unknown>) =>
+                fn(manager as unknown as EntityManager),
+        );
+        manager.findOne.mockResolvedValue({ ...running });
+        fellowshipRepository.findOneOrFail.mockResolvedValue(reloaded);
     });
 
     afterEach(() => jest.resetAllMocks());
 
-    it('completes only a running ACTIVE fellowship, with endDate = now', async () => {
-        fellowshipRepository.update.mockResolvedValue({ affected: 1 });
+    const change = (endDate: string) =>
+        service.changeEndDate('fellowship-1', { endDate }, admin, now);
 
-        await service.endFellowshipEarly('fellowship-1', now);
+    it('shortens a running contract and keeps it ACTIVE until the new date', async () => {
+        const result = await change('2027-03-01');
 
-        expect(fellowshipRepository.update).toHaveBeenCalledWith(
+        expect(manager.findOne).toHaveBeenCalledWith(Fellowship, {
+            where: { id: 'fellowship-1' },
+            lock: { mode: 'pessimistic_write' },
+        });
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
             {
-                id: 'fellowship-1',
+                endDate: new Date('2027-03-01'),
                 status: FellowshipStatus.ACTIVE,
-                startDate: LessThanOrEqual(now),
-                endDate: MoreThan(now),
+                originalEndDate: running.endDate,
+                endDateChangedBy: { id: 'admin-1' },
+                endDateChangedAt: now,
             },
-            { status: FellowshipStatus.COMPLETED, endDate: now },
+        );
+        // The response is the row as re-read after the write.
+        expect(result.id).toBe('fellowship-1');
+        expect(fellowshipRepository.findOneOrFail).toHaveBeenCalled();
+    });
+
+    it('extends a contract up to 24 months from today', async () => {
+        await change('2028-11-27');
+
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            expect.objectContaining({
+                endDate: new Date('2028-11-27'),
+                status: FellowshipStatus.ACTIVE,
+            }),
         );
     });
 
-    it('rejects a fellowship that exists but is not running', async () => {
-        fellowshipRepository.update.mockResolvedValue({ affected: 0 });
-        fellowshipRepository.existsBy.mockResolvedValue(true);
+    it.each([
+        ['today', '2026-11-27'],
+        ['a past date (backdated)', '2026-10-15'],
+    ])(
+        'completes the fellowship now when the new end date is %s',
+        async (_, endDate) => {
+            await change(endDate);
 
-        await expect(
-            service.endFellowshipEarly('fellowship-1', now),
-        ).rejects.toThrow('Only a running fellowship can be ended');
+            expect(manager.update).toHaveBeenCalledWith(
+                Fellowship,
+                'fellowship-1',
+                expect.objectContaining({
+                    endDate: new Date(endDate),
+                    status: FellowshipStatus.COMPLETED,
+                }),
+            );
+        },
+    );
+
+    it('keeps the first contracted end date across later changes', async () => {
+        const firstContracted = new Date('2027-06-01T00:00:00Z');
+        manager.findOne.mockResolvedValue({
+            ...running,
+            originalEndDate: firstContracted,
+        });
+
+        await change('2027-03-01');
+
+        expect(manager.update).toHaveBeenCalledWith(
+            Fellowship,
+            'fellowship-1',
+            expect.objectContaining({ originalEndDate: firstContracted }),
+        );
     });
 
-    it('404s an unknown fellowship', async () => {
-        fellowshipRepository.update.mockResolvedValue({ affected: 0 });
-        fellowshipRepository.existsBy.mockResolvedValue(false);
+    it('returns 404 for an unknown fellowship', async () => {
+        manager.findOne.mockResolvedValue(null);
 
-        await expect(
-            service.endFellowshipEarly('missing', now),
-        ).rejects.toThrow('Fellowship not found');
+        await expect(change('2027-03-01')).rejects.toBeInstanceOf(
+            NotFoundException,
+        );
+        expect(manager.update).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        [
+            'a fellowship that is not ACTIVE',
+            { status: FellowshipStatus.COMPLETED },
+            '2027-03-01',
+            'Only an active fellowship that hasn’t ended',
+        ],
+        [
+            'an ACTIVE fellowship whose end date has passed',
+            { endDate: new Date('2026-11-27T00:00:00Z') },
+            '2027-03-01',
+            'Only an active fellowship that hasn’t ended',
+        ],
+        [
+            'an end date on or before the start date',
+            {},
+            '2026-06-01',
+            'End date must be after start date',
+        ],
+        [
+            'an end date more than 24 months from today',
+            {},
+            '2028-11-28',
+            'End date cannot be more than 24 months from today',
+        ],
+        [
+            'the current end date',
+            {},
+            '2026-12-01',
+            'The fellowship already ends on that date',
+        ],
+    ])('returns 400 for %s', async (_, overrides, endDate, message) => {
+        manager.findOne.mockResolvedValue({ ...running, ...overrides });
+
+        const result = change(endDate);
+
+        await expect(result).rejects.toBeInstanceOf(BadRequestException);
+        await expect(result).rejects.toThrow(message);
+        expect(manager.update).not.toHaveBeenCalled();
     });
 });
 

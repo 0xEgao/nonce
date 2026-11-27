@@ -47,6 +47,15 @@ export class Fellowship extends BaseEntity {
     @Column('timestamptz', { nullable: true })
     endDate!: Date | null;
 
+    // The contracted end date, saved the first time an admin changes endDate.
+    // Null while the contract still ends on the date it started with.
+    @Column('timestamptz', { nullable: true })
+    originalEndDate!: Date | null;
+
+    // When an admin last changed endDate; endDateChangedBy is who.
+    @Column('timestamptz', { nullable: true })
+    endDateChangedAt!: Date | null;
+
     @Column('decimal', { nullable: true, precision: 10, scale: 2 })
     amountUsd!: string | null;
 
@@ -60,6 +69,9 @@ export class Fellowship extends BaseEntity {
 
     @ManyToOne(() => User)
     user!: User;
+
+    @ManyToOne(() => User, { nullable: true })
+    endDateChangedBy!: User | null;
 
     @OneToOne(() => FellowshipApplication, (fa) => fa.fellowship)
     @JoinColumn()

@@ -36,6 +36,8 @@ export class FellowshipResponseDto {
     scopeOfWork!: string | null;
     startDate!: string | null;
     endDate!: string | null;
+    // The contracted end date if an admin has since changed endDate, else null.
+    originalEndDate!: string | null;
     amountUsd!: string | null;
     userId!: string;
     userName!: string | null;
@@ -75,6 +77,7 @@ export class FellowshipResponseDto {
         this.scopeOfWork = obj.scopeOfWork;
         this.startDate = obj.startDate;
         this.endDate = obj.endDate;
+        this.originalEndDate = obj.originalEndDate;
         this.amountUsd = obj.amountUsd;
         this.userId = obj.userId;
         this.userName = obj.userName;
@@ -118,6 +121,7 @@ export class FellowshipResponseDto {
             scopeOfWork: application.scopeOfWork,
             startDate: fellowship.startDate?.toISOString() ?? null,
             endDate: fellowship.endDate?.toISOString() ?? null,
+            originalEndDate: fellowship.originalEndDate?.toISOString() ?? null,
             amountUsd: fellowship.amountUsd,
             userId: fellowship.user.id,
             userName: fellowship.user.displayName,

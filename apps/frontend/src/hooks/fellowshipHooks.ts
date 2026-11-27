@@ -1,7 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { createUseMutation, createUseQuery } from '../http';
 import fellowshipService from '../services/fellowshipService.ts';
 import type { PaginatedDataDto, PaginatedQueryDto } from '../types/api.ts';
 import type {
+  ChangeFellowshipEndDateRequestDto,
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
   FellowshipApplicationNote,
@@ -299,14 +301,20 @@ export const useStartFellowshipContract = createUseMutation<
   },
 );
 
-export const useEndFellowship = createUseMutation<void, { id: string }>(
-  ({ id }) => fellowshipService.endFellowship(id),
-  {
-    queryInvalidation: async ({ queryClient }) => {
-      await queryClient.invalidateQueries({ queryKey: ['fellowships'] });
-    },
-  },
-);
+const useChangeFellowshipEndDateMutation = createUseMutation<
+  GetFellowshipResponseDto,
+  { id: string; body: ChangeFellowshipEndDateRequestDto }
+>(({ id, body }) => fellowshipService.changeFellowshipEndDate(id, body));
+
+// Refetches on failure too: a rejected change usually means the row moved
+// under the admin (e.g. the daily sweep completed it), and the lists should
+// show that. react-query waits for onSettled before mutateAsync settles.
+export const useChangeFellowshipEndDate = () => {
+  const queryClient = useQueryClient();
+  return useChangeFellowshipEndDateMutation({
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['fellowships'] }),
+  });
+};
 
 // =========================
 // Fellowship Documents — Queries
