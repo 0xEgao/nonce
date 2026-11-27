@@ -13,6 +13,7 @@ import {
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import {
@@ -21,9 +22,11 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  Pencil,
   PlayCircle,
   Search,
 } from 'lucide-react';
+import ChangeEndDateDialog from '../../../components/fellowship/ChangeEndDateDialog';
 import DocumentList from '../../../components/fellowship/DocumentList';
 import FellowshipPageLayout from '../../../components/fellowship/FellowshipPageLayout';
 import ProposalDialog from '../../../components/fellowship/ProposalDialog';
@@ -137,6 +140,13 @@ const handleFor = (f: GetFellowshipResponseDto): string | null => {
   return null;
 };
 
+// Mirrors the backend, which still decides: an ACTIVE fellowship whose end
+// date hasn't passed can have it changed.
+const canChangeEndDate = (f: GetFellowshipResponseDto): boolean =>
+  f.status === FellowshipStatus.ACTIVE &&
+  !!f.endDate &&
+  new Date(f.endDate).getTime() > Date.now();
+
 const monthShort = (m: number) =>
   new Date(2024, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
 
@@ -167,6 +177,8 @@ const FellowshipsAdmin = () => {
   const [proposalFellowship, setProposalFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose "Start contract" dialog is open (admin-only action).
   const [contractFellowship, setContractFellowship] = useState<GetFellowshipResponseDto | null>(null);
+  // Fellowship whose "Change end date" dialog is open (admin-only action).
+  const [endDateFellowship, setEndDateFellowship] = useState<GetFellowshipResponseDto | null>(null);
   // Fellowship whose document-review dialog is open (download + approve/reject).
   const [documentsFellowship, setDocumentsFellowship] = useState<GetFellowshipResponseDto | null>(null);
   const [toast, setToast] = useState<{ kind: 'success' | 'error'; msg: string } | null>(null);
@@ -409,6 +421,7 @@ const FellowshipsAdmin = () => {
                 onOpen={() => setProposalFellowship(f)}
                 onViewProposal={() => setProposalFellowship(f)}
                 onReviewDocuments={() => setDocumentsFellowship(f)}
+                onChangeEndDate={canChangeEndDate(f) ? () => setEndDateFellowship(f) : undefined}
               />
             ))
           )}
@@ -443,6 +456,16 @@ const FellowshipsAdmin = () => {
             </Button>
           ) : null
         }
+      />
+
+      <ChangeEndDateDialog
+        fellowship={endDateFellowship}
+        onClose={() => setEndDateFellowship(null)}
+        onSuccess={(msg) => {
+          setToast({ kind: 'success', msg });
+          setEndDateFellowship(null);
+        }}
+        onError={(msg) => setToast({ kind: 'error', msg })}
       />
 
       <StartContractDialog
@@ -797,11 +820,14 @@ const FellowshipRow = ({
   onOpen,
   onViewProposal,
   onReviewDocuments,
+  onChangeEndDate,
 }: {
   fellowship: GetFellowshipResponseDto;
   onOpen: () => void;
   onViewProposal: () => void;
   onReviewDocuments: () => void;
+  // Only passed when the end date can still be changed.
+  onChangeEndDate?: () => void;
 }) => {
   const tint = tintFor(fellowship.userName ?? fellowship.userEmail ?? fellowship.id);
   const trackColor = TRACK_COLORS[fellowship.type];
@@ -922,15 +948,50 @@ const FellowshipRow = ({
       </Typography>
 
       {/* End date */}
-      <Typography
-        sx={{
-          fontFamily: fontFamilyMono,
-          fontSize: '0.78rem',
-          color: fellowship.endDate ? 'text.primary' : 'text.secondary',
-        }}
-      >
-        {formatDate(fellowship.endDate)}
-      </Typography>
+      <Box sx={{ minWidth: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          <Typography
+            sx={{
+              fontFamily: fontFamilyMono,
+              fontSize: '0.78rem',
+              whiteSpace: 'nowrap',
+              color: fellowship.endDate ? 'text.primary' : 'text.secondary',
+            }}
+          >
+            {formatDate(fellowship.endDate)}
+          </Typography>
+          {onChangeEndDate && (
+            <Tooltip title="Change end date">
+              <IconButton
+                size="small"
+                aria-label="Change end date"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChangeEndDate();
+                }}
+                sx={{ p: 0.25, color: 'text.secondary', '&:hover': { color: 'primary.light' } }}
+              >
+                <Pencil size={13} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+        {fellowship.originalEndDate && (
+          <Typography
+            variant="caption"
+            title="The contracted end date, before an admin changed it"
+            sx={{
+              display: 'block',
+              color: 'text.secondary',
+              fontFamily: fontFamilyMono,
+              fontSize: '0.7rem',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            was {formatDate(fellowship.originalEndDate)}
+          </Typography>
+        )}
+      </Box>
 
       {/* Payout */}
       <Typography

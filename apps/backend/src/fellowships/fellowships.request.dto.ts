@@ -30,6 +30,11 @@ export class StartFellowshipContractDto {
     amountUsd!: number;
 }
 
+export class ChangeFellowshipEndDateDto {
+    @IsDateString({ strict: true })
+    endDate!: string;
+}
+
 export enum FellowshipSortBy {
     CREATED_AT = 'createdAt',
     START_DATE = 'startDate',
