@@ -103,6 +103,33 @@ email:
   from:
     email: noreply@bitshala.org # Sender email address
     name: Bitshala # Sender name
+  # Newsletters. Every key is optional and may stay blank, but must stay
+  # present: env overrides (EMAIL_NEWSLETTER_SMTP_HOST, EMAIL_NEWSLETTER_FROM_EMAIL,
+  # EMAIL_NEWSLETTER_DAILY_LIMIT, ...) only apply to keys that exist here.
+  # Google Workspace SMTP allows 2,000 messages/day per user (smtp-relay.gmail.com:
+  # 10,000). Use a dedicated sender account so a newsletter that hits the quota,
+  # or gets the account throttled, cannot block transactional mail on email.smtp.
+  newsletter:
+    # Blank = send newsletters through email.smtp.
+    smtp:
+      host:
+      port:
+      secure:
+      user:
+      pass:
+    # Blank = email.from.
+    from:
+      email:
+      name:
+    # Default Reply-To; each newsletter can override it.
+    replyTo:
+    # Max newsletter emails per rolling 24h, across every newsletter. Keep it
+    # under the account's daily quota, leaving room for test sends.
+    dailyLimit: 1500
+    # Pacing within that budget.
+    ratePerMinute: 30
+    # Postal address for the footer; shown when set.
+    postalAddress:
 # MaxMind GeoLite2 City, used to prefill a user's country/state/city from their
 # IP. Free account + license key at https://www.maxmind.com/en/geolite2/signup.
 # Keys must stay present (even blank) for the env overrides GEOIP_ACCOUNT_ID /

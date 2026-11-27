@@ -30,6 +30,7 @@ import FactCheckOutlined from '@mui/icons-material/FactCheckOutlined';
 import GroupOutlined from '@mui/icons-material/GroupOutlined';
 import Login from '@mui/icons-material/Login';
 import Logout from '@mui/icons-material/Logout';
+import MailOutlined from '@mui/icons-material/MailOutlined';
 import MenuBookOutlined from '@mui/icons-material/MenuBookOutlined';
 import SchoolOutlined from '@mui/icons-material/SchoolOutlined';
 import WorkspacePremiumOutlined from '@mui/icons-material/WorkspacePremiumOutlined';
@@ -43,6 +44,8 @@ interface NavItem {
   label: string;
   path: string;
   icon: SvgIconComponent;
+  // Also highlighted on every route under this prefix.
+  activePrefix?: string;
 }
 
 const adminNavItems: NavItem[] = [
@@ -89,6 +92,12 @@ const adminFellowshipLinks = [
 // Admin-only top-level tools — TAs (who share the rest of the staff nav) don't see these.
 const adminOnlyNavItems: NavItem[] = [
   { label: 'Users', path: '/admin/users', icon: GroupOutlined },
+  {
+    label: 'Newsletter',
+    path: '/admin/newsletter',
+    icon: MailOutlined,
+    activePrefix: '/admin/newsletter/',
+  },
 ];
 
 const EXPANDED_WIDTH = 260;
@@ -219,6 +228,10 @@ const Sidebar = () => {
 
   const isActive = (path: string) => location.pathname === path;
 
+  const isNavItemActive = (item: NavItem) =>
+    isActive(item.path) ||
+    (item.activePrefix !== undefined && location.pathname.startsWith(item.activePrefix));
+
   // The apply form opens from the My Applications page (it has no sidebar
   // entry of its own), so it keeps that link highlighted.
   const isStudentLinkActive = (path: string) =>
@@ -297,7 +310,7 @@ const Sidebar = () => {
       <Box sx={{ flex: 1, py: 1.5, px: 1, overflowY: 'auto' }}>
         <List disablePadding>
           {navItems.map((item) => {
-            const active = isActive(item.path);
+            const active = isNavItemActive(item);
             const Icon = item.icon;
             return (
               <Tooltip key={item.path} title={collapsed ? item.label : ''} placement="right" arrow>

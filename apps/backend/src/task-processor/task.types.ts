@@ -57,6 +57,12 @@ export type ArchiveAssignmentReposTaskData = {
 // Recurring sweep with no per-run input; each run queues the next one.
 export type CompleteEndedFellowshipsTaskData = Record<string, never>;
 
+// Sends one batch, then queues the next run (now, or once the daily limit or a
+// provider throttle allows). Safe to run twice for the same newsletter.
+export type SendNewsletterTaskData = {
+    newsletterId: string;
+};
+
 export type TaskDataMap = {
     [TaskType.ASSIGN_COHORT_ROLE]: AssignCohortRoleTaskData;
     [TaskType.ASSIGN_COHORT_ALUMNI_ROLE]: AssignCohortAlumniRoleTaskData;
@@ -71,6 +77,7 @@ export type TaskDataMap = {
     [TaskType.RECONCILE_CI_RUN]: ReconcileCIRunTaskData;
     [TaskType.ARCHIVE_ASSIGNMENT_REPOS]: ArchiveAssignmentReposTaskData;
     [TaskType.COMPLETE_ENDED_FELLOWSHIPS]: CompleteEndedFellowshipsTaskData;
+    [TaskType.SEND_NEWSLETTER]: SendNewsletterTaskData;
 };
 
 export type TaskData<T extends TaskType> = TaskDataMap[T];

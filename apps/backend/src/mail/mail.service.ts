@@ -576,6 +576,43 @@ export class MailService implements OnModuleInit {
         });
     }
 
+    /**
+     * The double opt-in link for a public newsletter sign-up. Transactional, so
+     * it goes through the main SMTP account, never the newsletter one.
+     */
+    async sendNewsletterSubscriptionConfirmationEmail(
+        email: string,
+        listNames: string[],
+        confirmUrl: string,
+    ): Promise<void> {
+        return this.sendTemplatedEmail({
+            to: email,
+            subject: 'Confirm your Bitshala newsletter subscription',
+            template: MailTemplate.NewsletterSubscriptionConfirmation,
+            context: {
+                listNames: joinForDisplay(listNames),
+                confirmUrl,
+            },
+        });
+    }
+
+    /**
+     * A signed-in user's newsletter preferences link, sent to their account
+     * address: opening it is what proves they own that inbox. Transactional,
+     * like the confirmation.
+     */
+    async sendNewsletterPreferencesLinkEmail(
+        email: string,
+        preferencesUrl: string,
+    ): Promise<void> {
+        return this.sendTemplatedEmail({
+            to: email,
+            subject: 'Manage your Bitshala newsletters',
+            template: MailTemplate.NewsletterPreferencesLink,
+            context: { preferencesUrl },
+        });
+    }
+
     async sendFellowshipReportRejectedEmail(
         userEmail: string,
         userName: string,
@@ -598,4 +635,10 @@ export class MailService implements OnModuleInit {
             },
         });
     }
+}
+
+// "A", "A and B", "A, B and C".
+function joinForDisplay(items: string[]): string {
+    if (items.length <= 1) return items.join('');
+    return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }

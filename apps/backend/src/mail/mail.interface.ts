@@ -122,6 +122,21 @@ export interface FellowshipReportRejectedContext {
     reviewerRemarks: string;
 }
 
+// No name: the address has not confirmed anything yet, and greeting with the
+// one typed into the public form would let anyone put their words in an email
+// from us to a stranger.
+export interface NewsletterSubscriptionConfirmationContext {
+    // Already joined for display ("A, B and C").
+    listNames: string;
+    confirmUrl: string;
+}
+
+// No name either: it would be the portal account's, and anyone can put any
+// address on their account.
+export interface NewsletterPreferencesLinkContext {
+    preferencesUrl: string;
+}
+
 export interface TemplateContextMap {
     [MailTemplate.WelcomeToWaitlist]: WelcomeToWaitlistContext;
     [MailTemplate.CohortJoiningConfirmation]: CohortJoiningConfirmationContext;
@@ -140,4 +155,6 @@ export interface TemplateContextMap {
     [MailTemplate.FellowshipReportReminder]: FellowshipReportReminderContext;
     [MailTemplate.FellowshipReportApproved]: FellowshipReportApprovedContext;
     [MailTemplate.FellowshipReportRejected]: FellowshipReportRejectedContext;
+    [MailTemplate.NewsletterSubscriptionConfirmation]: NewsletterSubscriptionConfirmationContext;
+    [MailTemplate.NewsletterPreferencesLink]: NewsletterPreferencesLinkContext;
 }

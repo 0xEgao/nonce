@@ -16,6 +16,7 @@ import { FellowshipsService } from '@/fellowships/fellowships.service';
 import { AssignmentProvisioningService } from '@/assignments/assignment-provisioning.service';
 import { RunsService } from '@/assignments/runs.service';
 import { AdminAssignmentsService } from '@/assignments/admin-assignments.service';
+import { NewsletterSendService } from '@/newsletter/sending/newsletter-send.service';
 
 @Injectable()
 export class APITaskProcessorService {
@@ -38,6 +39,7 @@ export class APITaskProcessorService {
         private readonly assignmentProvisioningService: AssignmentProvisioningService,
         private readonly runsService: RunsService,
         private readonly adminAssignmentsService: AdminAssignmentsService,
+        private readonly newsletterSendService: NewsletterSendService,
         private readonly discordAlert: DiscordAlertService,
     ) {}
 
@@ -159,6 +161,9 @@ export class APITaskProcessorService {
                     await this.fellowshipsService.handleCompleteEndedFellowships(
                         task,
                     );
+                    break;
+                case TaskType.SEND_NEWSLETTER:
+                    await this.newsletterSendService.handleSendNewsletter(task);
                     break;
                 default:
                     throw new ApiError(
