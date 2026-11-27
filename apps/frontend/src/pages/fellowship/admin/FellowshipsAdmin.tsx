@@ -583,16 +583,16 @@ const FilterPill = ({
 // ---- table header ----
 
 // Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
-// Budget: minimums + gaps + row padding = 1090px. With the sidebar open the table
+// Budget: minimums + gaps + row padding = 1112px. With the sidebar open the table
 // gets the window width minus 390px (260 sidebar, 2×64 page padding, 2 border), so
-// it fits from a 1480px window and scrolls below that. Fellow and Project truncate
+// it fits from a 1502px window and scrolls below that. Fellow and Project truncate
 // with an ellipsis; the other minimums are their widest content plus a few px
-// ("Developer", "Starter Grant", "Nov 27, 2026", "$5000.00/mo" since payouts cap at
-// $5000, and the compact "Docs approved" chip). Project has the lowest minimum for
-// its weight, so it takes all the slack up to ~1190px of table; past that the
-// other columns start growing by their weights too.
+// ("Developer", "Starter Grant", "Nov 27, 2026" plus End date's edit pencil,
+// "$5000.00/mo" since payouts cap at $5000, and the compact "Docs approved" chip).
+// Project has the lowest minimum for its weight, so it takes all the slack up to
+// ~1210px of table; past that the other columns start growing by their weights too.
 const COLS =
-  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(110px, 0.9fr) 200px';
+  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(114px, 1fr) minmax(88px, 0.9fr) minmax(110px, 0.9fr) 200px';
 const COL_GAP = 1.25;
 
 const SortableHeader = ({
