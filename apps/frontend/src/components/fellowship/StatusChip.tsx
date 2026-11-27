@@ -47,14 +47,24 @@ const LABEL_MAP: Record<string, string> = {
   PENDING_REVIEW: 'Under review',
 };
 
+// Short forms of the longest labels, for table columns too narrow for them.
+// They match the status filter pills on the admin fellowships page.
+const COMPACT_LABEL_MAP: Record<string, string> = {
+  AWAITING_DOCUMENTS: 'Awaiting docs',
+  DOCUMENTS_IN_REVIEW: 'Docs in review',
+  DOCUMENTS_APPROVED: 'Docs approved',
+};
+
 interface Props {
   status: AnyStatus;
   size?: 'small' | 'medium';
+  /** Use the short label where one exists. */
+  compact?: boolean;
 }
 
-export const StatusChip = ({ status, size = 'small' }: Props) => {
+export const StatusChip = ({ status, size = 'small', compact = false }: Props) => {
   const palette = COLOR_MAP[status] ?? COLOR_MAP.DRAFT;
-  const label = LABEL_MAP[status] ?? status;
+  const label = (compact ? COMPACT_LABEL_MAP[status] : undefined) ?? LABEL_MAP[status] ?? status;
   return (
     <Chip
       size={size}
