@@ -394,28 +394,28 @@ const FellowshipsAdmin = () => {
               has to scroll, so row backgrounds and dividers span the full width. */}
           <Box sx={{ minWidth: 'min-content' }}>
             <HeaderRow sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
-            {isLoading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-                <CircularProgress size={22} />
-              </Box>
-            ) : fellowships.length === 0 ? (
-              <Box sx={{ py: 6, textAlign: 'center' }}>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  No fellowships match these filters.
-                </Typography>
-              </Box>
-            ) : (
-              fellowships.map((f) => (
-                <FellowshipRow
-                  key={f.id}
-                  fellowship={f}
-                  onOpen={() => setProposalFellowship(f)}
-                  onViewProposal={() => setProposalFellowship(f)}
-                  onReviewDocuments={() => setDocumentsFellowship(f)}
-                />
-              ))
-            )}
+            {fellowships.map((f) => (
+              <FellowshipRow
+                key={f.id}
+                fellowship={f}
+                onOpen={() => setProposalFellowship(f)}
+                onViewProposal={() => setProposalFellowship(f)}
+                onReviewDocuments={() => setDocumentsFellowship(f)}
+              />
+            ))}
           </Box>
+          {/* Outside the min-content box so they stay centered in the visible area. */}
+          {isLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress size={22} />
+            </Box>
+          ) : fellowships.length === 0 ? (
+            <Box sx={{ py: 6, textAlign: 'center' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                No fellowships match these filters.
+              </Typography>
+            </Box>
+          ) : null}
         </Box>
         {totalRecords > 0 && fellowships.length > 0 && (
           <PaginationFooter
@@ -559,12 +559,17 @@ const FilterPill = ({
 
 // ---- table header ----
 
-// Proportional columns so the row fills the width evenly instead of dumping all
-// slack into Project. Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
-// Minimums fit a laptop screen with the sidebar open (~1120px of table).
-// Kind fits "Starter Grant" on one line; Project truncates first, with an ellipsis.
+// Order: Fellow, Track, Kind, Project, Start date, End date, Payout, Status, Actions.
+// Budget: minimums + gaps + row padding = 1090px. With the sidebar open the table
+// gets the window width minus 390px (260 sidebar, 2×64 page padding, 2 border), so
+// it fits from a 1480px window and scrolls below that. Fellow and Project truncate
+// with an ellipsis; the other minimums are their widest content plus a few px
+// ("Developer", "Starter Grant", "Nov 27, 2026", "$5000.00/mo" since payouts cap at
+// $5000, and the compact "Docs approved" chip). Project has the lowest minimum for
+// its weight, so it takes all the slack up to ~1190px of table; past that the
+// other columns start growing by their weights too.
 const COLS =
-  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(104px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(100px, 0.9fr) 200px';
+  'minmax(150px, 1.6fr) minmax(70px, 0.7fr) minmax(90px, 0.8fr) minmax(86px, 2fr) minmax(92px, 1fr) minmax(92px, 1fr) minmax(88px, 0.9fr) minmax(110px, 0.9fr) 200px';
 const COL_GAP = 1.25;
 
 const SortableHeader = ({
@@ -864,10 +869,22 @@ const FellowshipRow = ({
           >
             {fellowship.userName ?? '—'}
           </Typography>
+          {/* Truncates like the name. Inline-block rather than block keeps the
+              row height it had as an inline span. */}
           {handleFor(fellowship) && (
             <Typography
               variant="caption"
-              sx={{ color: 'text.secondary', fontFamily: fontFamilyMono, fontSize: '0.7rem' }}
+              sx={{
+                display: 'inline-block',
+                maxWidth: '100%',
+                verticalAlign: 'bottom',
+                color: 'text.secondary',
+                fontFamily: fontFamilyMono,
+                fontSize: '0.7rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
             >
               {handleFor(fellowship)}
             </Typography>
@@ -951,7 +968,7 @@ const FellowshipRow = ({
 
       {/* Status */}
       <Box>
-        <StatusChip status={fellowship.status} />
+        <StatusChip status={fellowship.status} compact />
       </Box>
 
       {/* Actions */}
