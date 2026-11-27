@@ -2,6 +2,7 @@ import axios, { AxiosHeaders, type AxiosInstance, type AxiosRequestConfig, type 
 import { getAuthTokenFromStorage } from './authService.ts';
 import type { PaginatedDataDto } from '../types/api.ts';
 import type {
+  ChangeFellowshipEndDateRequestDto,
   CreateFellowshipApplicationRequestDto,
   CreateFellowshipReportRequestDto,
   FellowshipApplicationNote,
@@ -397,6 +398,19 @@ class FellowshipService {
       url: `/fellowships/${id}/start-contract`,
       data: body,
     });
+  };
+
+  public changeFellowshipEndDate = async (
+    id: string,
+    body: ChangeFellowshipEndDateRequestDto,
+  ): Promise<GetFellowshipResponseDto> => {
+    const { data } = await this.request<GetFellowshipResponseDto>({
+      headers: this.getRequestHeaders(),
+      method: 'PATCH',
+      url: `/fellowships/${id}/end-date`,
+      data: body,
+    });
+    return data;
   };
 
   // =========================
